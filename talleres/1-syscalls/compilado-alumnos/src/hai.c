@@ -7,7 +7,23 @@
 #include <stdlib.h>
 #include <errno.h>
 
+
+void parent();
+void child();
+
 int main(int argc, char* argv[]) {
-  	// Completar
+  	pid_t pid = fork();
+	if(pid == 0) {
+		child();
+	} else {
+		parent(pid);
+	}
 	return 0;
+}
+
+void parent(pid_t child_pid) {
+	write(1, "padre\n", 6);
+}
+void child() {
+	write(1, "hijo\n", 5);
 }
