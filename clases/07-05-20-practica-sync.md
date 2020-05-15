@@ -16,8 +16,8 @@ Primitivas
 - `wait()`: Mientras el valor sea <= 0 se bloquea el proceso esperando
   un signal. Luego decrementa el valor del semáforo.
 - `signal()`: Incrementa en uno el valor del semáforo y despierta a
-  *alguno* de los procesos que estén haciendo `wait` sobre él.
-
+  *alguno* de los procesos que estén haciendo `wait` sobre él. El resto
+  quedan bloqueados
 
 ### Mutex
 
