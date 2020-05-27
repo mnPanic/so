@@ -1,0 +1,48 @@
+IPC
+Se desea implementar la función traductor() que toma las primeras n líneas de
+texto de un archivo de entrada y las copia traducidas en cualquier orden a otro
+archivo. 
+
+La función traductor() toma tres parámetros:
+
+- n: Cantidad de líneas a traducir.
+- infile: Nombre del archivo de entrada.
+- outfile: Nombre del archivo de salida.
+
+Cada línea será traducida por un proceso distinto. Para traducir las líneas se deberá contar con un proceso principal que envíe cada una de ellas a los otros n procesos. Cada uno de estos recibirá una línea, la traducirá mediante la llamada a la función void traducir(char* linea, char* linea_traducida) y la enviará traducida al proceso principal. Sólo el proceso principal será el encargado de leer el archivo de entrada infile y escribir las líneas traducidas en outfile. Es fundamental que los procesos puedan traducir líneas en simultáneo dado que la función traducir es muy lenta.
+
+Importante: Toda la comunicación entre procesos debe hacerse mediante pipes.
+
+
+void traductor(int n, char* infile, char* outfile) {
+    file = open(infile, "r")
+
+    // creo un pipe para poder comunicarme con los procesos
+    int fds[2] # 0: read, 1: write
+    pipe(fds)
+    lines = 0
+    for line in file:
+        lines ++
+        int pid = fork()
+        if pid == 0
+            char* linea_traducida = malloc(LINE_SIZE);
+            traducir_linea(linea, linea_traducida)
+            // soy el hijo
+            write(fds[1], linea_traducida, LINE_SIZE)
+
+        else
+            // soy el padre
+    
+
+    outfile = open(outfile, "w")
+    // espero a que lleguen todas las lineas traducidas
+    for _ in lines:
+        char* traducida = malloc(LINE_SIZE)
+        read(fds[0], traducida, LINE_SIZE)
+        file.write(traducida)
+    
+    // cierro el pipe
+    close(fds[0])
+    close(fds[1])
+
+}

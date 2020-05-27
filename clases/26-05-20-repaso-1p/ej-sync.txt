@@ -1,0 +1,79 @@
+Ej sync
+
+Para poder cumplir con el aislamiento social preventivo y obligatorio, un pequeño supermercado de barrio solo permite ingresar a n clientes simultáneamente. Si al llegar un cliente descubre que el supermercado está lleno, vuelve a su casa de inmediato. En el supermercado hay una sola caja, a la que los clientes se dirigen cuando terminan de elegir sus productos. Si no hay nadie esperando para pagar, el cajero se va a dormir. Si cuando un cliente decide ir a pagar el cajero está durmiendo, lo despierta.
+
+1. Escribir el código del cajero y de los clientes.
+2. Argumentar por qué la solución cumple la propiedad LOCK-FREEDOM, considerando que pagar es una sección crítica para los clientes.
+3. Enunciar una propiedad de safety que se interesante que se cumpla en este problema, y argumentar por qué se cumple.
+
+# Es el problema del barbero del little book of semaphores
+
+n = # clientes aceptados
+mutex_clientes = mutex() # sem(1)
+int clientes = 0 # solo entran n a la vez
+
+# si cola es positivo son los que estan haciendo cola.
+# si es negativo es porque el cajero esta esperando a que llegue alguien
+cola = sem(0)
+cajero = sem(0)
+
+cliente_finalizo = sem(0)
+cajero_finalizo = sem(0)
+
+## Cliente
+mutex_clientes.lock()
+    if clientes == n:
+        mutex_clientes.unlock()
+        return # me voy a casa
+    
+    clientes++
+mutex_clientes.unlock()
+
+elegirProductos()
+
+# rendezvous entre cliente y cajero
+# el cliente llego a la cola
+cola.signal()
+# espero a que el cajero me atienda
+cajero.wait()
+pagar()
+
+# sincronizo el final
+cliente_finalizo.signal()
+cajero_finalizo.wait()
+
+mutex_clientes.lock()
+    clientes--
+mutex_clientes.unlock()
+
+## Cajero
+while(true)
+    cola.wait() # espera a que haya un cliente
+    cajero.signal()
+    cobrar()
+
+    cajero_finalizo.signal()
+    cliente_finalizo.wait()
+
+
+--
+
+LOCK-FREEDOM
+
+si hay un cliente esperando pagar, y ninguno pagando, en algun momento hjay un
+clienter pagando.
+
+no se quedan esperando indefinidamente si el cajero esta libre
+
+--
+
+Por ejemplo
+
+- Nunca hay mas de n clientes
+Es de safety ya que un contraejemplo seria finito, una serie de pasos que
+termine en que en algun momento del tiempo termine con mas de n clientes.
+
+- No hay mas de un cliente pagando a la vez
+En ningun momento hay mas de un cliente pagando a la vez
+
+- EXCL para modificar cantidad de clientes
