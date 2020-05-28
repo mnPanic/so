@@ -12,36 +12,35 @@ Cada proceso imprime por pantalla el nombre de la persona que representa
 
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 int main(void) {
-    pid_t pid = fork();
+    // Este proceso deberia ser abraham
+    pid_t pid;
+    printf("Soy Abraham\n");
 
-    if(pid != 0) {
-        // abraham
-        printf("abraham\n");
-    } else {
-        // homero
-        printf("homero\n");
+    pid = fork();
+    if (pid == 0) {
+        printf("Soy Homero\n");
         pid = fork();
-        if (pid != 0) {
-            // homero
-            pid = fork();
-            if (pid != 0) {
-                // homero
-                pid = fork();
-                if(pid != 0) {
-                    // homero
-                } else {
-                    printf("bart\n");
-                    return 0;
-                }
-            } else {
-                printf("maggie\n");
-                return 0;
-            }
-        } else {
-            printf("lisa\n");
-            return 0;
+        if (pid == 0) {
+            // Bart
+            printf("Soy Bart\n");
+            exit(0);
         }
+        pid = fork();
+        if (pid == 0) {
+            // Lisa
+            printf("Soy Lisa\n");
+            exit(0);
+        }
+        pid = fork();
+        if (pid == 0) {
+            // Maggie
+            printf("Soy Maggie\n");
+            exit(0);
+        }
+        exit(0);
     }
+    return 0;
 }

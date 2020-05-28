@@ -1,5 +1,94 @@
 # Resumen para el primer parcial de SO
 
+## Fork
+
+Es la forma que tiene el sistema operativo de crear nuevos procesos.
+
+```text
+$ man fork
+
+    fork - create a child process
+
+    pid_t fork(void);
+
+DESCRIPTION
+    fork()  creates  a new process by duplicating the calling process.  The
+    new process is referred to as the child process.  The  calling  process
+    is referred to as the parent process.
+
+    The child process and the parent process run in separate memory spaces.
+    At the time of fork() both memory spaces have the same content.  Memory
+    writes,  file  mappings (mmap(2)), and unmappings (munmap(2)) performed
+    by one of the processes do not affect the other.
+
+RETURN VALUE
+    On success, the PID of the child process is returned in the parent, and
+    0  is returned in the child.  On failure, -1 is returned in the parent,
+    no child process is created, and errno is set appropriately.
+
+...
+
+NOTES
+    Under Linux, fork() is implemented using copy-on-write  pages,  so  the
+    only  penalty  that it incurs is the time and memory required to dupli‐
+    cate the parent's page tables, and to create a  unique  task  structure
+    for the child.
+```
+
+`fork` entonces crea un nuevo proceso. En el caso del creador (padre) se retorna
+el PID del hijo, y en el caso del hijo retorna 0. Ejemplo:
+
+```c
+pid_t pid = fork();
+if(pid == 0) {
+    // soy el hijo
+    child()
+    exit(0)
+}
+
+// soy el padre y pid es el Process ID de mi hijo
+```
+
+### Otras funciones
+
+- `int clone(...)`: Crea un nuevo proceso. Es usado en la implementacion de
+  threads.
+- `int execve(const char* filename, char* const argv[], char* const envp[])`:
+  Sustituye la imagen de memoria del programa por la del programa ubicado en el
+  `filename`.
+
+- `pid_t vfork(void)`: Crea un hijo sin copiar la memoria del padre, pensado
+  para que el hijo haga fork.
+
+- `void exit(int status)`: Finaliza el proceso actual
+
+### Esperar a que un proceso hijo termine
+
+- `pid_t waitpid(pid_t pid, int *wstatus, int options);`: Suspende la ejecucion
+  del proceso hasta que el hijo especificado por `pid` cambie de estado. Por
+  defecto, espera solo a que los hijos terminen, pero se puede modificar
+  mediante las options.
+
+  `pid` puede ser:
+  - `< - 1`: Espera a cualquier hijo cuyo process group ID sea igual al `pid`
+  - `-1`: Espera a cualquier proceso hijo
+  - `0`: Espera a cualquier hijo cuyo process group ID sea igual al `pid` del
+    proceso que llamo la funcion.
+  - `> 0`: Espera al proceso hijo con el process id igual a `pid`.
+
+- `pid_t wait(int* status)`: Bloquea al padre hasta que algún hijo termine.
+  Es equivalente a hacer `waitpid(-1, &status, 0);`
+
+### Copy on write
+
+Los procesos no comparten la memoria, cada uno cuenta con su espacio propio.
+Entonces por ejemplo, si un proceso usa mucha memoria, podria llegar a ser
+pesado copiar toda la memoria al nuevo cuando se haga `fork`.
+
+Para evitar esto, en linux los procesos creados usando `fork` comienzan con sus
+paginas de memoria apuntando a las mismas que el padre. Recien cuando alguien
+escribe en esas paginas se hace la copia: **copy on write**.
+
 ## IPC - Inter Process Communication
 
 ### FDs
