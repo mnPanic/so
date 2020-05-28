@@ -91,15 +91,20 @@ escribe en esas paginas se hace la copia: **copy on write**.
 
 ## IPC - Inter Process Communication
 
-### FDs
+### File Descriptors (FD)
 
 Cada proceso tiene en su PCB una tabla con referencias a los archivos que tiene
 abiertos. Un **file descriptor** es un indice de esa tabla.
 
+Los FDs los usa el kernel para referenciar a los archivos abiertos que tiene
+cada proceso. Cada entry en la tabla apunta a un archivo
+
+![File descriptors](img/ipc/file-descriptor-illustration.jpg)
+
 Distintas entradas de file descriptor pueden apuntar al mismo archivo, pero
 son *instancias de apertura* distintas.
 
-### Comunicacion
+### Modelo de flujo de comunicacion
 
 Cada proceso tiene definida una entrada y salida estandar, y puede abstraerse
 de donde y hacia donde se está escribiendo.
@@ -107,22 +112,31 @@ de donde y hacia donde se está escribiendo.
 Por lo general los procesos esperan tener abiertos 3 **file descriptors**
 (las entries 0, 1 y 2 de la tabla)
 
-- 0 = stdin
-- 1 = stdout
-- 2 = stderr
+- 0 = `stdin` (standard input)
+- 1 = `stdout` (standard output)
+- 2 = `stderr` (standard error)
 
-### Interaccion
+**Se heredan del proceso padre cuando se crea el hijo** con `fork`, y se
+mantiene despues de la llamada a `execve`.
 
-Se heredan del padre cuando se crea el proceso.
+### Interaccion con archivos
+
+Para escribir y leer de file descriptors,
 
 - `ssize_t read(int fd, void *buf, size_t count);`
 - `ssize_t write(int fd, const void *buf, size_t count);`
   
-donde `fd` es el file descriptor.
-Ambas devuelven la cantidad de bytes que devuelve, -1 en caso de error.
+donde
+
+- `fd` es el file descriptor.
+- `buf` es el buffer al cual se leen o escriben datos.
+- `count`: es la cantidad maxima de bytes a leer o escribir.
+
+Ambas devuelven la cantidad de bytes leidos, -1 en caso de error.
 
 Son **bloqueantes** por defecto, es decir, por ej. con el read hasta que no
-encuentre información disponible se queda esperando.
+encuentre información disponible se queda esperando. Esto se puede cambiar
+mediante el uso de ciertos flags (`man 2 fcntl`)
 
 ### dup2
 
@@ -170,14 +184,27 @@ dup2()
     previously open, it is silently closed before being reused.
 ```
 
+#### Esquema de redireccion
+
+![Esquema de redireccion](img/ipc/esquema-redireccion.png)
+
 ### Pipes
 
 ```bash
 echo "sistemas" | wc -c
 ```
 
+- Se llama a `echo` que escribe por stdout
+- `wc -c` cuenta los caracteres que entran por stdin
+- Se conecta el stdout de echo con el stdin de wc -c mediante el pipe
+
+![Esquema pipe](img/ipc/esquema-pipes.png)
+
+Un pipe no es mas que un archivo que esta en memoria y actua como **buffer**
+para leer y escribir de manera **secuencial**.
+
 Los pipes tienen dos extremos, uno de lectura y uno de escritura, y se pueden
-crear mediante una syscall.
+crear mediante la siguiente syscall
 
 ```c
 int pipe(int pipefd[2])
@@ -185,6 +212,35 @@ int pipe(int pipefd[2])
 
 - `pipefd[0]`: fd que apunta al extremo del pipe en el cual se **lee**
 - `pipefd[1]`: fd del extremo en el que se **escribe**
+
+#### Pipes en PCB
+
+Al crearse, se agregan sus extremos a la tabla de file descriptors.
+
+![Pipes PCB](img/ipc/pipe-fds.png)
+
+Y despues de hacer fork? Los file descriptors se copian, y siguen apuntando a
+los mismos extremos del pipe.
+
+![Pipes luego de fork](img/ipc/pipe-fds-fork.png)
+
+#### Comunicacion entre procesos con pipes
+
+![IPC con pipes](img/ipc/pipes-inter-process.png)
+
+Un proceso no puede acceder a un *pipe* anonimo que haya sido creado por un
+proceso que no este vinculado a el, por lo tanto, requieren que los procesos que
+se comunican sean descendientes del proceso que crea el pipe.
+
+El proceso padre tambien lo puede usar para comunicarse con sus descendientes.
+
+Mas de dos procesos pueden tener acceso al mismo pipe, pero a priori no hay
+forma de saber cual proceso fue el que escribio en el, salvo que el contenido
+escrito lo especifique.
+
+El SO provee una forma segura de leer y escribir en un pipe de forma
+concurrente: si se hacen varios writes desde distintos procesos a un mismo pipe,
+si bien el orden no sera el mismo, aparecen los datos sin entrelazarse entre si.
 
 ## Sincronizacion
 
