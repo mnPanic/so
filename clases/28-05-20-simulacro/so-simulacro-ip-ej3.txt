@@ -1,0 +1,42 @@
+Resolucion ej 3
+===============
+
+Teniendo 3 marcos de memoria, y 7 páginas, calcule el miss-rate para la
+siguiente secuencia de páginas usando el algoritmo Second Chance:
+
+    7,7,1,1,2,2,4,4,5,5,6,6,3,3, 
+
+Consideraciones:
+
+- Los hits se notan con un signo de exclamacion (!) en el marco de paginas, los
+  miss con un asterisco (*)
+- Los second chance se marcan con signo de exclamacion en el orden de remocion
+
+    Marcos          Orden de remocion
+    M1  M2  M3      P1  P2  P3
+7   7*  -   -       7   -   - 
+7   7!  -   -       7!  -   -           # se le otorga second chance al 7
+1   7   1*  -       7!  1   -
+1   7   1!  -       7!  1!  -           # se le otorga second chance al 1
+2   7   1   2*      7!  1!  2
+2   7   1   2!      7!  1!  2!          # se le otorga second chance al 2
+4                   1!  2!  7           # 7 gasta su second chance y va al fondo
+                    2!  7   1           # 1 gasta so snd chance y va al findo
+                    7   1   2           # 2 gasta su second chance y va al fondo
+    4*  1   2       1   2   4           # el 7 es reemplazado por el 4
+4   4!  1   2       1   2   4!          # 4 tiene snd chance
+5   4   5*  2       2   4!  5
+5   4   5!  2       2   4!  5!
+6   4   5   6*      4!  5!  6
+6   4   5   6!      4!  5!  6!
+3                   5!  6!  4
+                    6!  4   5
+                    4   5   6
+    3*  5   6       5   6   3
+3   3!  5   6       5   6   3!
+
+misses = 7
+total = 14
+hits = 7
+
+hit rate = miss rate = 0.5 o 50%

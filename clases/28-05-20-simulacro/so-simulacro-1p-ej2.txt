@@ -1,0 +1,66 @@
+Resolucion ej 2
+===============
+
+Se copio y pego el enunciado (denotado por quotes, >), y se escribe sobre el.
+
+> Si consideramos tres procesos A,B,C, los semáforos semA, semB, semC y semAux
+> y la siguiente propuesta de pseudocódigo:
+
+# Inicio común para todos los procesos:
+semA = n > 0
+semB = 1
+semC = 0
+semAux = 0
+
+A
+1 wait( semA )          # pasa de largo porque semA es n > 0
+                        # y es el unico que le hace wait
+....
+2 signal( semAux )      # Habilita a B2
+
+B
+1 wait( semB )          # pasa de largo porque semB es 1 y es el 
+                        # unico que hace wait
+
+2 wait( semAux )        # solo podria correr despues del signal de A (A2)
+...
+3 signal( semA )        # no cambia en nada
+4 signal( semC )        # habilitaria a C a correr
+
+C
+1 wait( semC )          # Queda bloqueado hasta B4 pues semC arranca en 0
+2 wait( semAux )        # solo podria correr despues del signal de A
+...
+3 signal( semA )
+4 signal( semB )
+
+Observaciones
+-------------
+
+- A1 y B1 pueden correr concurrentemente
+- C no puede correr hasta que hagan signal de semC, ya que comienza en 0, y el
+  unico lugar donde se realiza ese signal es en B4. Por lo tanto B < C
+- A2 < B2 pues B2 hace wait de semAux y A2 hace el unico signal
+
+El orden entonces seria
+
+    A1 | B1 < A2 < B2 < B3 < B4 < C1 < C2, Bloqueado para siempre!
+
+Pues C queda haciendo wait en semAux, que solo tiene un signal en A2, el cual
+es "consumido" por B2, quedando en 0. Entonces espera para siempre.
+Noto que esto no lleva a un DEADLOCK, ya que la ejecucion de A y B no esta
+determinada por C, pero el no podra volver a ser ejecutado.
+
+> ¿Cuál de las siguientes secuencias de ejecución son posibles?
+> a. ABACABAC...
+No puede ser porque C puede correr una sola vez, luego se queda bloqueado.
+
+> b. A(BoC)A(BoC)...
+Podria ser ABAC, pero no ACAC ya que C corre una sola vez.
+
+> c. ABCABC...
+C puede correr una sola vez
+
+> d. Ninguna de las anteriores.
+Queda por descarte.
+
