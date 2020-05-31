@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Resumen para el primer parcial de SO</title>
+        <style>
+</style>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/katex.min.css" integrity="sha384-yFRtMMDnQtDRO8rLpMIKrtPCD5jdktao2TV19YiZYWMDkUR5GQZR/NOVTdquEx1j" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+        <link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <style>
+.task-list-item { list-style-type: none; } .task-list-item-checkbox { margin-left: -20px; vertical-align: middle; }
+</style>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        
+        <script src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+        
+    </head>
+    <body class="vscode-light">
+        <h1 id="resumen-para-el-primer-parcial-de-so">Resumen para el primer parcial de SO</h1>
+<h2 id="sos">SOs</h2>
+<p>Algunas definiciones</p>
+<ul>
+<li><strong>multiprogramacion</strong>: Mas de un programa se ejecuta a la vez.</li>
+<li><strong>contencion</strong>: Varios programas queriendo acceder al mismo recurso a la vez.</li>
+</ul>
+<p>Un SO tiene que manejar la contención de los recursos y la concurrencia de
+manera tal de lograr</p>
+<ul>
+<li>Buen rendimiento</li>
+<li>Correctitud</li>
+</ul>
+<p>Y para poder hacerlo, corre en nivel de privilegio 0.</p>
+<h3 id="elementos-basicos-de-un-so">Elementos basicos de un SO</h3>
+<ul>
+<li><strong>Drivers</strong>: Programas que hacen de interfaz con el hardware</li>
+<li><strong>Kernel</strong>: La parte central del sistema operativo.</li>
+<li><strong>Shell</strong>: Es un porgrama mas que permite al usuario interactuar con el SO.
+Ejemplos: <code>sh</code>, <code>bash</code>, etc.</li>
+<li><strong>Proceso</strong>: Programa en ejecucion, unidad de scheduling, espacio de memoria
+asociado y otros atributos.</li>
+<li><strong>Archivo</strong>: Bytes con un nombre y atributos</li>
+<li><strong>Directorio</strong>: Colección de archivos y otros directorios que tiene nombre y
+es organizado jerárquicamente.</li>
+<li><strong>Dispostivo virtual</strong>: Abstracción de un dispositivo físico. Por lo general
+es un file.</li>
+<li><strong>File sistem</strong>: Forma de organizar los datos en el disco para gestionar su
+acceso, permisos, etc.</li>
+<li><strong>Directorios del sistema</strong>: Directorios donde el SO guarda los archivos que
+necesita. <code>/boot</code>, <code>/devices</code>, etc.</li>
+<li><strong>Binarios del sistema</strong>: Archivos en directorios del sistema que llevan
+a cabo tareas importantes.</li>
+<li><strong>Archivos de configuracion</strong>: El SO saca de ahi info que necesita para
+funcionar.</li>
+</ul>
+<h3 id="procesos">Procesos</h3>
+<p>Un programa es una secuencia de pasos escrita en algún lenguaje, que cuando se
+pone en ejecución, pasa a ser un <em>proceso</em>. A cada uno se le asigna un
+identificador único, el <strong>process id</strong> o <strong>pid</strong>.</p>
+<h4 id="memoria">Memoria</h4>
+<p>La memoria de un proceso está compuesta por</p>
+<ul>
+<li>texto: Código de máquina del programa</li>
+<li>datos: Heap</li>
+<li>stack</li>
+</ul>
+<h4 id="que-puede-hacer">Que puede hacer</h4>
+<ul>
+<li>Terminar (<code>exit()</code>)</li>
+<li>Lanzar un proceso hijo (<code>fork()</code>, <code>exec()</code>, <code>system()</code>)</li>
+<li>Ejecutar en la CPU</li>
+<li>Hacer una syscall</li>
+<li>Realizar I/O</li>
+</ul>
+<h5 id="syscalls">Syscalls</h5>
+<p>La diferencia entre una llamada a funcion normal y una <em>syscall</em> es que esta
+ultima requiere un cambio de nivel de privilegio, un cambio de contexto, e
+incluso a veces una interrupcion.</p>
+<h4 id="árbol-de-procesos">Árbol de procesos</h4>
+<p>Todos los procesos están organizados jerárquicamente, como un árbol. Cada uno
+tiene la posibilidad de lanzar un proceso hijo.</p>
+<p>Entonces hay un proceso que es el padre de todo el resto, <code>root</code> o <code>init</code>, que
+es el que luego lanza el <code>shell</code>.</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/api/fork.png" alt="Fork"></p>
+<h4 id="fork">Fork</h4>
+<p>Es la forma que tiene el sistema operativo de crear nuevos procesos.</p>
+<pre><code class="language-text"><code><div>$ man fork
+
+    fork - create a child process
+
+    pid_t fork(void);
+
+DESCRIPTION
+    fork()  creates  a new process by duplicating the calling process.  The
+    new process is referred to as the child process.  The  calling  process
+    is referred to as the parent process.
+
+    The child process and the parent process run in separate memory spaces.
+    At the time of fork() both memory spaces have the same content.  Memory
+    writes,  file  mappings (mmap(2)), and unmappings (munmap(2)) performed
+    by one of the processes do not affect the other.
+
+RETURN VALUE
+    On success, the PID of the child process is returned in the parent, and
+    0  is returned in the child.  On failure, -1 is returned in the parent,
+    no child process is created, and errno is set appropriately.
+
+...
+
+NOTES
+    Under Linux, fork() is implemented using copy-on-write  pages,  so  the
+    only  penalty  that it incurs is the time and memory required to dupli‐
+    cate the parent's page tables, and to create a  unique  task  structure
+    for the child.
+</div></code></code></pre>
+<p><code>fork</code> entonces crea un nuevo proceso. En el caso del creador (padre) se retorna
+el PID del hijo, y en el caso del hijo retorna 0. Ejemplo:</p>
+<pre><code class="language-c"><div><span class="hljs-keyword">pid_t</span> pid = fork();
+<span class="hljs-keyword">if</span>(pid == <span class="hljs-number">0</span>) {
+    <span class="hljs-comment">// soy el hijo</span>
+    child()
+    <span class="hljs-built_in">exit</span>(<span class="hljs-number">0</span>)
+}
+
+<span class="hljs-comment">// soy el padre y pid es el Process ID de mi hijo</span>
+</div></code></pre>
+<h3 id="otras-funciones">Otras funciones</h3>
+<ul>
+<li>
+<p><code>int clone(...)</code>: Crea un nuevo proceso. Es usado en la implementacion de
+threads.</p>
+</li>
+<li>
+<p><code>int execve(const char* filename, char* const argv[], char* const envp[])</code>:
+Sustituye la imagen de memoria del programa por la del programa ubicado en el
+<code>filename</code>.</p>
+</li>
+<li>
+<p><code>pid_t vfork(void)</code>: Crea un hijo sin copiar la memoria del padre, pensado
+para que el hijo haga fork.</p>
+</li>
+<li>
+<p><code>void exit(int status)</code>: Finaliza el proceso actual</p>
+</li>
+<li>
+<p><code>int system(const char *command)</code>: Ejecuta el comando. Hace <code>fork</code> y luego
+<code>execl</code>.</p>
+</li>
+</ul>
+<h3 id="esperar-a-que-un-proceso-hijo-termine">Esperar a que un proceso hijo termine</h3>
+<ul>
+<li>
+<p><code>pid_t waitpid(pid_t pid, int *wstatus, int options);</code>: Suspende la ejecucion
+del proceso hasta que el hijo especificado por <code>pid</code> cambie de estado. Por
+defecto, espera solo a que los hijos terminen, pero se puede modificar
+mediante las options.</p>
+<p><code>pid</code> puede ser:</p>
+<ul>
+<li><code>&lt; - 1</code>: Espera a cualquier hijo cuyo process group ID sea igual al <code>pid</code></li>
+<li><code>-1</code>: Espera a cualquier proceso hijo</li>
+<li><code>0</code>: Espera a cualquier hijo cuyo process group ID sea igual al <code>pid</code> del
+proceso que llamo la funcion.</li>
+<li><code>&gt; 0</code>: Espera al proceso hijo con el process id igual a <code>pid</code>.</li>
+</ul>
+</li>
+<li>
+<p><code>pid_t wait(int* status)</code>: Bloquea al padre hasta que algún hijo termine.
+Es equivalente a hacer <code>waitpid(-1, &amp;status, 0);</code></p>
+</li>
+</ul>
+<h3 id="copy-on-write">Copy on write</h3>
+<p>Los procesos no comparten la memoria, cada uno cuenta con su espacio propio.
+Entonces por ejemplo, si un proceso usa mucha memoria, podria llegar a ser
+pesado copiar toda la memoria al nuevo cuando se haga <code>fork</code>.</p>
+<p>Para evitar esto, en linux los procesos creados usando <code>fork</code> comienzan con sus
+paginas de memoria apuntando a las mismas que el padre. Recien cuando alguien
+escribe en esas paginas se hace la copia: <strong>copy on write</strong>.</p>
+<h2 id="ipc---interprocess-communication">IPC - InterProcess Communication</h2>
+<h3 id="file-descriptors-fd">File Descriptors (FD)</h3>
+<p>Cada proceso tiene en su PCB una tabla con referencias a los archivos que tiene
+abiertos. Un <strong>file descriptor</strong> es un indice de esa tabla.</p>
+<p>Los FDs los usa el kernel para referenciar a los archivos abiertos que tiene
+cada proceso. Cada entry en la tabla apunta a un archivo</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/file-descriptor-illustration.jpg" alt="File descriptors"></p>
+<p>Distintas entradas de file descriptor pueden apuntar al mismo archivo, pero
+son <em>instancias de apertura</em> distintas.</p>
+<h3 id="modelo-de-flujo-de-comunicacion">Modelo de flujo de comunicacion</h3>
+<p>Cada proceso tiene definida una entrada y salida estandar, y puede abstraerse
+de donde y hacia donde se está escribiendo.</p>
+<p>Por lo general los procesos esperan tener abiertos 3 <strong>file descriptors</strong>
+(las entries 0, 1 y 2 de la tabla)</p>
+<ul>
+<li>0 = <code>stdin</code> (standard input)</li>
+<li>1 = <code>stdout</code> (standard output)</li>
+<li>2 = <code>stderr</code> (standard error)</li>
+</ul>
+<p><strong>Se heredan del proceso padre cuando se crea el hijo</strong> con <code>fork</code>, y se
+mantiene despues de la llamada a <code>execve</code>.</p>
+<h3 id="interaccion-con-archivos">Interaccion con archivos</h3>
+<p>Para escribir y leer de file descriptors,</p>
+<ul>
+<li><code>ssize_t read(int fd, void *buf, size_t count);</code></li>
+<li><code>ssize_t write(int fd, const void *buf, size_t count);</code></li>
+</ul>
+<p>donde</p>
+<ul>
+<li><code>fd</code> es el file descriptor.</li>
+<li><code>buf</code> es el buffer al cual se leen o escriben datos.</li>
+<li><code>count</code>: es la cantidad maxima de bytes a leer o escribir.</li>
+</ul>
+<p>Ambas devuelven la cantidad de bytes leidos, -1 en caso de error.</p>
+<p>Son <strong>bloqueantes</strong> por defecto, es decir, por ej. con el read hasta que no
+encuentre información disponible se queda esperando. Esto se puede cambiar
+mediante el uso de ciertos flags (<code>man 2 fcntl</code>)</p>
+<h3 id="dup2">dup2</h3>
+<pre><code class="language-bash"><div><span class="hljs-built_in">echo</span> <span class="hljs-string">"Es jueves y mi PCB lo sabe"</span> &gt; archivo.txt
+</div></code></pre>
+<ul>
+<li>Se llama al programa echo, que escribe su parámetro por <strong>stdout</strong></li>
+<li>Con &gt; se le indica a la consola que <strong>stdout</strong> se redirija a <code>archivo.txt</code></li>
+<li>Cómo? Abre archivo.txt y hace que la entry de stdout apunte a el</li>
+</ul>
+<p>La función <code>dup2(int oldfd, int newfd)</code> pisa el file descriptor en <code>newfd</code> el
+contenido que está en <code>oldfd</code> (<code>man dup2</code>)</p>
+<pre><code class="language-text"><code><div>$ man dup
+
+    ...
+
+    #include &lt;unistd.h&gt;
+
+    int dup(int oldfd);
+    int dup2(int oldfd, int newfd);
+
+    ...
+
+    The  dup()  system  call  creates  a copy of the file descriptor oldfd,
+    using the lowest-numbered unused file descriptor for the  new  descrip‐
+    tor.
+
+    After a successful return, the old and new file descriptors may be used
+    interchangeably.  They refer to the same  open  file  description  (see
+    open(2)) and thus share file offset and file status flags; for example,
+    if the file offset is modified by using lseek(2) on  one  of  the  file
+    descriptors, the offset is also changed for the other.
+
+    The two file descriptors do not share file descriptor flags (the close-
+    on-exec flag).  The close-on-exec flag (FD_CLOEXEC; see  fcntl(2))  for
+    the duplicate descriptor is off.
+
+dup2()
+    The  dup2() system call performs the same task as dup(), but instead of
+    using the lowest-numbered unused file  descriptor,  it  uses  the  file
+    descriptor number specified in newfd.  If the file descriptor newfd was
+    previously open, it is silently closed before being reused.
+</div></code></code></pre>
+<h4 id="esquema-de-redireccion">Esquema de redireccion</h4>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/esquema-redireccion.png" alt="Esquema de redireccion"></p>
+<h3 id="pipes">Pipes</h3>
+<pre><code class="language-bash"><div><span class="hljs-built_in">echo</span> <span class="hljs-string">"sistemas"</span> | wc -c
+</div></code></pre>
+<ul>
+<li>Se llama a <code>echo</code> que escribe por stdout</li>
+<li><code>wc -c</code> cuenta los caracteres que entran por stdin</li>
+<li>Se conecta el stdout de echo con el stdin de wc -c mediante el pipe</li>
+</ul>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/esquema-pipes.png" alt="Esquema pipe"></p>
+<p>Un pipe no es mas que un archivo que esta en memoria y actua como <strong>buffer</strong>
+para leer y escribir de manera <strong>secuencial</strong>.</p>
+<p>Los pipes tienen dos extremos, uno de lectura y uno de escritura, y se pueden
+crear mediante la siguiente syscall</p>
+<pre><code class="language-c"><div><span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">pipe</span><span class="hljs-params">(<span class="hljs-keyword">int</span> pipefd[<span class="hljs-number">2</span>])</span>
+</span></div></code></pre>
+<ul>
+<li><code>pipefd[0]</code>: fd que apunta al extremo del pipe en el cual se <strong>lee</strong></li>
+<li><code>pipefd[1]</code>: fd del extremo en el que se <strong>escribe</strong></li>
+</ul>
+<h4 id="pipes-en-pcb">Pipes en PCB</h4>
+<p>Al crearse, se agregan sus extremos a la tabla de file descriptors.</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/pipe-fds.png" alt="Pipes PCB"></p>
+<p>Y despues de hacer fork? Los file descriptors se copian, y siguen apuntando a
+los mismos extremos del pipe.</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/pipe-fds-fork.png" alt="Pipes luego de fork"></p>
+<h4 id="comunicacion-entre-procesos-con-pipes">Comunicacion entre procesos con pipes</h4>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/pipes-inter-process.png" alt="IPC con pipes"></p>
+<p>Un proceso no puede acceder a un <em>pipe</em> anonimo que haya sido creado por un
+proceso que no este vinculado a el, por lo tanto, requieren que los procesos que
+se comunican sean descendientes del proceso que crea el pipe.</p>
+<p>El proceso padre tambien lo puede usar para comunicarse con sus descendientes.</p>
+<p>Mas de dos procesos pueden tener acceso al mismo pipe, pero a priori no hay
+forma de saber cual proceso fue el que escribio en el, salvo que el contenido
+escrito lo especifique.</p>
+<p>El SO provee una forma segura de leer y escribir en un pipe de forma
+concurrente: si se hacen varios writes desde distintos procesos a un mismo pipe,
+si bien el orden no sera el mismo, aparecen los datos sin entrelazarse entre si.</p>
+<h2 id="scheduling">Scheduling</h2>
+<p>A cada proceso se le da un tiempo de ejecucion llamado <em>quantum</em>, luego del cual
+se lo saca. Si el sistema operativo hace <em>preemtion</em>, entonces saca al proceso
+de la CPU cuando se terminó su quantum.</p>
+<h3 id="context-switch">Context Switch</h3>
+<p>Para cambiar de proceso, debemos guardar lo que estaba haciendo para luego poder
+restaurarlo. Esto se guarda en una estructura de datos llamada <strong>PCB</strong>
+(<em>Process Control Block</em>)</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/scheduling/context-switch.png" alt="Context switch"></p>
+<h3 id="estados-de-un-proceso">Estados de un proceso</h3>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/scheduling/process-states.png" alt="Process states"></p>
+<ul>
+<li><strong>Listo</strong> (<em>ready</em>): El proceso no esta bloqueado, pero no tiene CPU
+disponible para correr. Esta esperando su turno.</li>
+<li><strong>Corriendo</strong> (<em>running</em>): Esta usando la CPU.</li>
+<li><strong>Bloqueado</strong> (<em>blocked</em>): No puede correr hasta que algo externo suceda
+(tipicamente que haya terminado la E/S)</li>
+<li><strong>Terminado</strong> (<em>terminated</em>)</li>
+</ul>
+<p>Y si tiene desalojo,</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/scheduling/process-states-desalojo.png" alt="Process states"></p>
+<h4 id="tipos-de-schediling">Tipos de schediling</h4>
+<p>El scheduler debe tomar decisiones cuando un proceso</p>
+<ol>
+<li>Se bloquea</li>
+<li>Se carga un proceso nuevo</li>
+<li>Cuando un proceso se ejecuta durante un cierto tiempo permitido (<em>quantum</em>)</li>
+<li>Cuando un proceso se desbloquea</li>
+<li>Cuando un proceso termina</li>
+</ol>
+<p>Si las decisiones solo ocurren en 1 y 4, decimos que es <strong>non-preemptive</strong>
+(<em>sin desalojo</em>). Sino, se llama <strong>preemtive</strong> (<em>con desalojo</em>).</p>
+<ul>
+<li><strong>Preemptive</strong> (<em>apropiativo</em>, o <em>con desalojo</em>): El scheduler desaloja a los
+procesos terminado su quantum. Para eso usa la interrupción del clock.</li>
+<li><strong>Non preemptive</strong> <em>(cooperativo)</em>: El scheduler analiza la situación cuando
+toma control el kernel (i.e cuando se hace una syscall). Y a veces proveen
+llamadas explícitas para que ejecuten otros procesos.</li>
+</ul>
+<h3 id="nomenclaturas">Nomenclaturas</h3>
+<ul>
+<li>
+<p><strong>Cambio de contexto</strong>: Cada vez que se decide cambiar el proceso en
+ejecución, y trae un cierto <strong>overhead</strong>.</p>
+</li>
+<li>
+<p>Los tiempo que cada proceso utiliza la CPU se denomina
+<strong>ráfaga de procesamiento</strong> (<em>CPU Bursts</em>) y los tiempos que usan para I/O,
+<strong>ráfagas de E/S</strong> (<em>IO Bursts</em>). La duración de cada ráfaga puede variar.</p>
+</li>
+<li>
+<p>A los procesos que tienden a tener mayormente IO Bursts en comparación a las
+de CPU, se los llama procesos de E/S.</p>
+</li>
+</ul>
+<h3 id="politicas-de-scheduling">Politicas de scheduling</h3>
+<p>El scheduler tiene que elegir de todos los procesos listos a cual correr
+despues, y la forma en la que lo hace esta de terminado por la <em>politica de</em>
+<em>scheduling</em> que elija.</p>
+<p>Ademas requiere tener una lista de PCBs, llamada <strong>tabla de procesos</strong>.</p>
+<p>Luego a nivel conceptual, un proceso también se puede tomar como una <em>unidad</em>
+<em>de scheduling</em>.</p>
+<p>Las políticas no son más que algoritmos que deciden el momento en que cada
+proceso se estará ejecutando, y en que procesador lo hará, en caso de que
+existan varios.</p>
+<ul>
+<li>
+<p><strong>FIFO</strong>/<strong>FCFS</strong> (First Came, First Served)</p>
+<p>La CPU asigna a los procesos en el orden de llegada.
+Cuando se asigna el procesador, el proceso ejecuta hasta finalizar o
+bloquearse, no se interrumpe debido a que se haya ejecutado demasiado tiempo.</p>
+<p>Cuando un proceso llega al sistema o vuelve a ready (por ej, después de
+terminar E/S), se coloca al final de la cola.</p>
+</li>
+<li>
+<p><strong>Por prioridades</strong></p>
+<p>Cada proceso tiene un valor de prioridad asignado, y se ejecutan primero los
+de mayor prioridad. Y hay que elegir un criterio para decidir entre los de
+igual prioridad.</p>
+<p>Si las prioridades cambian a lo largo de la ejecución, se le dice de prioridad
+<em>variable</em>, y sino, de prioridades <em>fijas</em>.</p>
+<p>Puede darse la <strong>starvation</strong> (<em>inanición</em>) de un proceso, es decir, que nunca
+le toque correr. En particular a un proceso de menor prioridad, porque siempre
+llegan los de mayor.</p>
+</li>
+<li>
+<p><strong>SJF</strong> (Shortest Job First)</p>
+<p>Se ejecutan primero los procesos de menor duración. Para esto es necesario
+saber la duración de antemano, y no tiene desalojo.</p>
+<p>Es un caso particular de un scheduler con prioridades fijas (donde la
+prioridad está dada por el tiempo de ejecución).</p>
+</li>
+<li>
+<p><strong>SRTF</strong> (Shortest Remaining Time First)</p>
+<p>Primero ejecutan los procesos a los que les resta menos tiempo de CPU. Al
+iguaque SJF, es necesario saber la duración, y llevar una cuenta del tiempo
+ejecutado.</p>
+<p>Caso particular de scheduler con prioridades variables.</p>
+</li>
+<li>
+<p><strong>Round Robin</strong></p>
+<p>Se le da un <em>quantum</em> a cada proceso, el cual es una cantidad determinada de
+ciclos de clock, y se va alternando entre ellos.</p>
+<p>Al igual que FCFS los procesos en estado Ready están en una cola, pero el
+sistema operativo puede decidir interrumpir su ejecución pasado su quantum.</p>
+<p>La elección de cuanto dura es fundamental, ya que si es muy grande, el sistema
+será percibido como lento, y si es muy chico, no se amortiza el costo de
+context switch y el scheduling.</p>
+</li>
+<li>
+<p><strong>Múltiples colas</strong></p>
+<p>Existen varias colas de procesos en estado <em>Ready</em>, con distintas prioridades.
+Los procesos se asignan a una cola dependiendo de alguna propiedad del proceso
+(que puede ser prioridad fija o variable).</p>
+<p>Hay que definir un criterio para administrar las colas.</p>
+</li>
+</ul>
+<h3 id="diagramas-de-gantt">Diagramas de GANTT</h3>
+<p>Son usados para mostrar el estado de cada uno de los procesos existentes durante
+un periodo de tiempo determinado.</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/scheduling/gantt.png" alt="Gantt"></p>
+<h3 id="métricas-de-rendimiento">Métricas de rendimiento</h3>
+<p>No siempre son compatibles entre ellas</p>
+<ul>
+<li><em>Fairness</em>: Justicia en la asignación del CPU</li>
+<li>Tiempo de respuesta: Tiempo que el proceso tarda en empezar a ejecutarse.</li>
+<li><em>Throughput</em>: Rendimiento del sistema. Cantidad de procesos que terminan por
+unidad de tiempo.</li>
+<li><em>Turnaround</em>: Tiempo total que le toma a un proceso ejecutar completamente.</li>
+<li><em>Waiting time</em>: Tiempo que un proceso pasa en estado <em>ready</em>.</li>
+</ul>
+<h2 id="memoria-1">Memoria</h2>
+<h2 id="sincronizacion-entre-procesos">Sincronizacion entre procesos</h2>
+<p>Hacer que los procesos puedan cooperar sin estorbarse.</p>
+<p>Toda ejecución debería dar un resultado equivalente a <em>alguna</em> ejecución
+<em>secuencial</em> de los mismos procesos. Sino,es porque ocurre lo llamado
+<strong>race condition</strong> o <em>condición de carrera</em></p>
+<p>El resultado obtenido varia dependiendo de en que orden se ejecutan las cosas.</p>
+<h3 id="secciones-críticas">Secciones críticas</h3>
+<p>Una forma de solucionar el problema es lograr la exclusión mutua mediante
+<strong>secciones críticas</strong>, <em>CRIT</em></p>
+<h3 id="deadlock">Deadlock</h3>
+<p>Se da cuando el sistema se traba, porque todos los procesos están esperando
+recursos que el resto no libera por a su vez estar esperando recursos.</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/deadlock.png" alt="Deadlock"></p>
+<h3 id="primitivas-de-sync">Primitivas de sync</h3>
+<h4 id="tas">TAS</h4>
+<p>El hardware provee una instrucción que permite establecer atómicamente el valor
+de una variable entera en 1: <code>TestAndSet</code> o TAS.</p>
+<p>Pone un 1 y devuelve el valor anterior, de manera <strong>atómica</strong>, es decir, de
+forma indivisible, incluso con varias CPUs.</p>
+<pre><code class="language-c"><div><span class="hljs-function"><span class="hljs-keyword">bool</span> <span class="hljs-title">TestAndSet</span><span class="hljs-params">(<span class="hljs-keyword">bool</span>* dest)</span> </span>{
+    <span class="hljs-keyword">bool</span> prev = *dest;
+    *dest = TRUE;
+    <span class="hljs-keyword">return</span> prev;
+}
+</div></code></pre>
+<p>Un ejemplo para lockear usando TAS, con <strong>busy waiting</strong></p>
+<pre><code class="language-c"><div><span class="hljs-keyword">bool</span> lock; <span class="hljs-comment">// shared</span>
+
+<span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">main</span><span class="hljs-params">()</span> </span>{
+    <span class="hljs-keyword">while</span>(<span class="hljs-literal">true</span>) {
+        <span class="hljs-keyword">while</span>(TestAndSet(&amp;lock)); <span class="hljs-comment">// Si da true, ya estaba lockeado</span>
+
+        <span class="hljs-comment">// CRIT</span>
+
+        <span class="hljs-comment">// EXIT</span>
+        lock = <span class="hljs-literal">false</span>;
+    }
+}
+</div></code></pre>
+<p>Aquí se hace <em>busy waiting</em> o <em>espera activa</em> ya que el proceso está consumiendo
+tiempo de CPU para intentar de obtener el lock.</p>
+<h4 id="semaforos">Semaforos</h4>
+<p>Es un TAD que permite controlar el acceso a un recurso compartido por
+múltiples procesos.</p>
+<p>Tiene un valor al cual no podemos acceder. La única de interactuar con el
+semáforo es mediante las primitivas <code>wait()</code> y <code>signal()</code>, las cuales son
+<strong>atómicas</strong> a efectos de los procesos. (es decir, no se entrelazan con
+otros procesos, no debería haber condiciones de carrera por ese lado)</p>
+<p>Primitivas</p>
+<ul>
+<li><code>sem(uint val)</code>: Devuelve un nuevo semáforo inicializado en ese valor</li>
+<li><code>wait()</code>: Mientras el valor sea &lt;= 0 se bloquea el proceso esperando
+un signal. Luego decrementa el valor del semáforo.</li>
+<li><code>signal()</code>: Incrementa en uno el valor del semáforo y despierta a
+<em>alguno</em> de los procesos que estén haciendo <code>wait</code> sobre él. El resto
+quedan bloqueados</li>
+</ul>
+<h4 id="mutex">Mutex</h4>
+<p>Permite realizar la <em>exclusión mútua</em>, y se puede implementar con semáforos,</p>
+<pre><code class="language-c"><div>mutex = sem(<span class="hljs-number">1</span>)
+</div></code></pre>
+<p>donde,</p>
+<ul>
+<li><code>mutex.lock</code> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo></mrow><annotation encoding="application/x-tex">\equiv</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span></span></span></span> <code>wait(sem)</code></li>
+<li><code>mutex.unlock</code> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo></mrow><annotation encoding="application/x-tex">\equiv</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span></span></span></span> <code>signal(sem)</code></li>
+</ul>
+<h4 id="atomicos">Atomicos</h4>
+<p>Es un objeto que provee <code>getAndSet()</code> y <code>testAndSet()</code>, implementa operaciones
+indivisibles a nivel de hardware.</p>
+<pre><code class="language-c"><div><span class="hljs-keyword">private</span> <span class="hljs-keyword">bool</span> reg;
+<span class="hljs-function">atomic <span class="hljs-keyword">bool</span> <span class="hljs-title">get</span><span class="hljs-params">()</span> </span>{ <span class="hljs-keyword">return</span> reg; }
+<span class="hljs-function">atomic <span class="hljs-keyword">void</span> <span class="hljs-title">set</span><span class="hljs-params">(<span class="hljs-keyword">bool</span> b)</span> </span>{ reg = b; }
+
+<span class="hljs-function">atomic <span class="hljs-keyword">bool</span> <span class="hljs-title">getAndSet</span><span class="hljs-params">(<span class="hljs-keyword">bool</span> b)</span> </span>{
+    <span class="hljs-keyword">bool</span> m = reg;
+    reg = b;
+    <span class="hljs-keyword">return</span> m;
+}
+
+<span class="hljs-function">atomic <span class="hljs-keyword">bool</span> <span class="hljs-title">testAndSet</span><span class="hljs-params">()</span> </span>{
+    <span class="hljs-keyword">return</span> getAndSet(<span class="hljs-literal">true</span>);
+}
+</div></code></pre>
+<h4 id="tas-lock--spin-lock">TAS Lock / Spin Lock</h4>
+<p>Es un mutex construido con <code>testAndSet()</code></p>
+<pre><code class="language-c"><div><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">TASLock</span> {</span>
+    atomic&lt;<span class="hljs-keyword">bool</span>&gt; reg;
+    <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">new</span><span class="hljs-params">()</span> </span>{ reg.<span class="hljs-built_in">set</span>(<span class="hljs-literal">false</span>); }
+    <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">lock</span><span class="hljs-params">()</span> </span>{ <span class="hljs-keyword">while</span> (reg.testAndSet()) {} } <span class="hljs-comment">// no es atomico</span>
+    <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">unlock</span><span class="hljs-params">()</span> </span>{ reg.<span class="hljs-built_in">set</span>(<span class="hljs-literal">false</span>); }
+}
+</div></code></pre>
+<p>Produce <strong>busy waiting</strong> pero puede tener un overhead menor
+al de usar semáforos.</p>
+<h4 id="ttaslock--local-spinning">TTASLock / Local spinning</h4>
+<p>Testea anets de hacer test and set, de esta forma minimizando el impacto del
+busy waiting.</p>
+<pre><code class="language-c"><div><span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">lock</span><span class="hljs-params">()</span> </span>{
+    <span class="hljs-keyword">while</span> <span class="hljs-literal">true</span> {
+        <span class="hljs-keyword">while</span>(mtx.get());
+        <span class="hljs-keyword">if</span> (!mtx.testAndSet()) <span class="hljs-keyword">return</span>;
+    }
+}
+</div></code></pre>
+<p><em>Local Spinning</em> es mas eficiente</p>
+<ul>
+<li>Lee la memoria cache mientras sea verdadero</li>
+<li>Cuando un proceso hace <code>unlock()</code> hay cache miss</li>
+</ul>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/ttas-tas-comparison.png" alt="TTASLock vs TASLock"></p>
+<h4 id="cas">CAS</h4>
+<p>Otra primitiva es <em>Compare And Swap</em> o <strong>CAS</strong></p>
+<pre><code class="language-cpp"><div><span class="hljs-function">atomic T <span class="hljs-title">compareAndSwap</span><span class="hljs-params">(T u, T v)</span> </span>{
+    T res = reg;
+    <span class="hljs-keyword">if</span> (u == res) reg = v;
+    <span class="hljs-keyword">return</span> res;
+}
+</div></code></pre>
+<h3 id="problemas-de-sync">Problemas de sync</h3>
+<p>Algunos problemas posibles entonces son</p>
+<ul>
+<li>Race conditions</li>
+<li>Deadlocks</li>
+<li>Starvation</li>
+</ul>
+<h3 id="correctitud">Correctitud</h3>
+<p>La correctitud de un programa paralelo es un conjunto de propiedades que se
+plantean sobre toda ejecución.</p>
+<h3 id="propiedades">Propiedades</h3>
+<p>Para argumentar que una propiedad no es cierta, es necesario mostrar un
+<em>contraejemplo</em>, una sucesión de pasos que muestra una ejecución del sistema
+que no la cumpla.</p>
+<h4 id="tipos">Tipos</h4>
+<ul>
+<li><strong>safety</strong>
+<ul>
+<li>Intuición: Nada malo sucede</li>
+<li>Nunca pasan cosas que no queremos que pasen</li>
+<li>Ejemplos: Mutex, ausencia de deadlock, no perdida de mensajes, etc.</li>
+<li>Definición: Tienen un <em>contraejemplo finito</em></li>
+</ul>
+</li>
+<li><strong>progreso</strong> o <strong>liveness</strong>
+<ul>
+<li>Intuición: En algun momento algo bueno si va a suceder</li>
+<li>El sistema progresa, suceden cosas, el sistema no se queda bloqueado.</li>
+<li>Ejemplos: &quot;Si se presiona el botón de stop, el tren frena&quot;, no inanición.</li>
+<li>Definición: Los contraejemplos no son finitos (una secuencia infinita de
+pasos).</li>
+</ul>
+</li>
+<li><strong>fairness</strong>
+<ul>
+<li>Intuición: Los procesos reciben su turno con infinita frecuencia.</li>
+<li>&quot;No se van a dar escenarios poco realistas en donde alguien es postergado
+para siempre&quot;</li>
+</ul>
+</li>
+</ul>
+<h4 id="modelo-de-proceso">Modelo de proceso</h4>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/modelo-proceso.png" alt="Modelo de proceso"></p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/logica-definiciones.png" alt="Definiciones"></p>
+<h4 id="ltl">LTL</h4>
+<pre><code class="language-text"><code><div>T |= F?             los estados t satisfacen F
+
+F = p
+F = F1 AND F2
+F = F1 OR F2
+F = [] F1           en todos los estados vale
+
+Por ejemplo,
+
+[] NOT(deadlock)    en ningun estado de mi sistema hay un deadlock
+
+F = &lt;&gt; F1           en algun momento del futuro vale F1
+
+&lt;&gt; estado == final  en algun momento llego al estado final.
+
+[] (pedido =&gt; &lt;&gt; respuesta)     tipica propiedad de liveness
+</div></code></code></pre>
+<h4 id="wait-freedom">WAIT-FREEDOM</h4>
+<p>Todo proceso que intenta acceder a la sección crítica, en algún momento lo
+logra, cada vez que lo intenta.</p>
+<p>Para todo proceso, si está en un estado TRY, habrá un momento posterior en el
+que estará en CRIT.</p>
+<p>Intuicion: Libre de procesos que esperan para siempre.</p>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/prop-wait-freedom.png" alt="WAIT FREEDOM"></p>
+<h4 id="fairness---equanimidad">FAIRNESS - Equanimidad</h4>
+<p>Para toda ejecucion <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span></span></span></span> y todo proceso <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.65952em;vertical-align:0em;"></span><span class="mord mathdefault">i</span></span></span></span>, <strong>si</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.65952em;vertical-align:0em;"></span><span class="mord mathdefault">i</span></span></span></span> <em>puede</em> hacer una
+transicion <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>l</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">l_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:-0.01968em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> en una cantidad infinita de estados <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span></span></span></span> <strong>entonces</strong>
+existe un <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.03148em;">k</span></span></span></span> tal que <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>τ</mi><mi>k</mi></msub><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><msub><mi>l</mi><mi>i</mi></msub></mpadded></mover><msub><mi>τ</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">\tau_k \xrightarrow{l_i} \tau_{k+1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.258108em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.108108em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3280857142857143em;"><span style="top:-2.357em;margin-left:-0.01968em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.638891em;vertical-align:-0.208331em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.208331em;"><span></span></span></span></span></span></span></span></span></span></p>
+<h4 id="excl---exclusión-mutua">EXCL - Exclusión Mutua</h4>
+<p>Para toda ejecución y estado, no puede haber más de un proceso i que esté en el
+mismo punto en el tiempo en CRIT.</p>
+<h4 id="lock-freedom---progreso">LOCK-FREEDOM - Progreso</h4>
+<p>Para toda ejecución y estado, si hay un proceso en TRY, y ninguno en CRIT,
+entonces hay un estado posterior tal que algún proceso está en CRIT.</p>
+<h4 id="deadlocklockoutstarvation-freedom---progreso-global-dependiente">DEADLOCK/LOCKOUT/STARVATION-FREEDOM - Progreso global dependiente</h4>
+<p>IN: Si está en try, en algún momento está en crit
+OUT: Si está en crit, en algún momento sale</p>
+<p>Para toda ejecución, si para todo estado y proceso i que está en crit, existe un
+estado tal que sale, entonces para todo estado posterior y todo proceso
+diferente, si intenta de entrar existe un estado para el cual entra.</p>
+<p>Que todos salgan implican que todos van a entrar en algún momento.</p>
+<h4 id="wait-freedom---progreso-global-absoluto">WAIT-FREEDOM - Progreso global absoluto</h4>
+<p>Todo proceso entra a la sección crítica</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi><mi>A</mi><mi>I</mi><mi>T</mi><mo>−</mo><mi>F</mi><mi>R</mi><mi>E</mi><mi>E</mi><mi>D</mi><mi>O</mi><mi>M</mi><mo>≡</mo><mi mathvariant="normal">∀</mi><mi>i</mi><mi mathvariant="normal">□</mi><mi>I</mi><mi>N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">WAIT-FREEDOM \equiv \forall i \square IN(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathdefault" style="margin-right:0.13889em;">W</span><span class="mord mathdefault">A</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.13889em;">F</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.05764em;">E</span><span class="mord mathdefault" style="margin-right:0.05764em;">E</span><span class="mord mathdefault" style="margin-right:0.02778em;">D</span><span class="mord mathdefault" style="margin-right:0.02778em;">O</span><span class="mord mathdefault" style="margin-right:0.10903em;">M</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∀</span><span class="mord mathdefault">i</span><span class="mord amsrm">□</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span></span></span></span></p>
+
+    </body>
+    </html>

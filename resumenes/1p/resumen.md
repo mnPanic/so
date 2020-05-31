@@ -473,22 +473,192 @@ No siempre son compatibles entre ellas
 
 ## Memoria
 
-## Sincronizacion
+## Sincronizacion entre procesos
 
-### Primitivas de sincronizacion
+Hacer que los procesos puedan cooperar sin estorbarse.
 
-Semaforos, atomic
+Toda ejecución debería dar un resultado equivalente a *alguna* ejecución
+*secuencial* de los mismos procesos. Sino,es porque ocurre lo llamado
+**race condition** o *condición de carrera*
+
+El resultado obtenido varia dependiendo de en que orden se ejecutan las cosas.
+
+### Secciones críticas
+
+Una forma de solucionar el problema es lograr la exclusión mutua mediante
+**secciones críticas**, *CRIT*
+
+### Deadlock
+
+Se da cuando el sistema se traba, porque todos los procesos están esperando
+recursos que el resto no libera por a su vez estar esperando recursos.
+
+![Deadlock](img/sync/deadlock.png)
+
+### Primitivas de sync
+
+#### TAS
+
+El hardware provee una instrucción que permite establecer atómicamente el valor
+de una variable entera en 1: `TestAndSet` o TAS.
+
+Pone un 1 y devuelve el valor anterior, de manera **atómica**, es decir, de
+forma indivisible, incluso con varias CPUs.
+
+```c
+bool TestAndSet(bool* dest) {
+    bool prev = *dest;
+    *dest = TRUE;
+    return prev;
+}
+```
+
+Un ejemplo para lockear usando TAS, con **busy waiting**
+
+```c
+bool lock; // shared
+
+void main() {
+    while(true) {
+        while(TestAndSet(&lock)); // Si da true, ya estaba lockeado
+
+        // CRIT
+
+        // EXIT
+        lock = false;
+    }
+}
+```
+
+Aquí se hace *busy waiting* o *espera activa* ya que el proceso está consumiendo
+tiempo de CPU para intentar de obtener el lock.
+
+#### Semaforos
+
+Es un TAD que permite controlar el acceso a un recurso compartido por
+múltiples procesos.
+
+Tiene un valor al cual no podemos acceder. La única de interactuar con el
+semáforo es mediante las primitivas `wait()` y `signal()`, las cuales son
+**atómicas** a efectos de los procesos. (es decir, no se entrelazan con
+otros procesos, no debería haber condiciones de carrera por ese lado)
+
+Primitivas
+
+- `sem(uint val)`: Devuelve un nuevo semáforo inicializado en ese valor
+- `wait()`: Mientras el valor sea <= 0 se bloquea el proceso esperando
+  un signal. Luego decrementa el valor del semáforo.
+- `signal()`: Incrementa en uno el valor del semáforo y despierta a
+  *alguno* de los procesos que estén haciendo `wait` sobre él. El resto
+  quedan bloqueados
+
+#### Mutex
+
+Permite realizar la *exclusión mútua*, y se puede implementar con semáforos,
+
+```c
+mutex = sem(1)
+```
+
+donde,
+
+- `mutex.lock` $\equiv$ `wait(sem)`
+- `mutex.unlock` $\equiv$ `signal(sem)`
+
+#### Atomicos
+
+Es un objeto que provee `getAndSet()` y `testAndSet()`, implementa operaciones
+indivisibles a nivel de hardware.
+
+```c
+private bool reg;
+atomic bool get() { return reg; }
+atomic void set(bool b) { reg = b; }
+
+atomic bool getAndSet(bool b) {
+    bool m = reg;
+    reg = b;
+    return m;
+}
+
+atomic bool testAndSet() {
+    return getAndSet(true);
+}
+```
+
+#### TAS Lock / Spin Lock
+
+Es un mutex construido con `testAndSet()`
+
+```c
+class TASLock {
+    atomic<bool> reg;
+    void new() { reg.set(false); }
+    void lock() { while (reg.testAndSet()) {} } // no es atomico
+    void unlock() { reg.set(false); }
+}
+```
+
+Produce **busy waiting** pero puede tener un overhead menor
+al de usar semáforos.
+
+#### TTASLock / Local spinning
+
+Testea anets de hacer test and set, de esta forma minimizando el impacto del
+busy waiting.
+
+```c
+void lock() {
+    while true {
+        while(mtx.get());
+        if (!mtx.testAndSet()) return;
+    }
+}
+```
+
+*Local Spinning* es mas eficiente
+
+- Lee la memoria cache mientras sea verdadero
+- Cuando un proceso hace `unlock()` hay cache miss
+
+![TTASLock vs TASLock](img/sync/ttas-tas-comparison.png)
+
+#### CAS
+
+Otra primitiva es *Compare And Swap* o **CAS**
+
+```cpp
+atomic T compareAndSwap(T u, T v) {
+    T res = reg;
+    if (u == res) reg = v;
+    return res;
+}
+```
+
+### Problemas de sync
+
+Algunos problemas posibles entonces son
+
+- Race conditions
+- Deadlocks
+- Starvation
+
+### Correctitud
+
+La correctitud de un programa paralelo es un conjunto de propiedades que se
+plantean sobre toda ejecución.
 
 ### Propiedades
 
-#### Tipos
+Para argumentar que una propiedad no es cierta, es necesario mostrar un
+*contraejemplo*, una sucesión de pasos que muestra una ejecución del sistema
+que no la cumpla.
 
-Contraejemplo: Sucesión de pasos que muestra una ejecución del sistema que viole
-cierta propiedad.
+#### Tipos
 
 - **safety**
   - Intuición: Nada malo sucede
-  - Nunca pasan cosas que no queremos que pasen"
+  - Nunca pasan cosas que no queremos que pasen
   - Ejemplos: Mutex, ausencia de deadlock, no perdida de mensajes, etc.
   - Definición: Tienen un *contraejemplo finito*
 - **progreso** o **liveness**
@@ -504,7 +674,30 @@ cierta propiedad.
 
 #### Modelo de proceso
 
-TODO
+![Modelo de proceso](img/sync/modelo-proceso.png)
+
+![Definiciones](img/sync/logica-definiciones.png)
+
+#### LTL
+
+```text
+T |= F?             los estados t satisfacen F
+
+F = p
+F = F1 AND F2
+F = F1 OR F2
+F = [] F1           en todos los estados vale
+
+Por ejemplo,
+
+[] NOT(deadlock)    en ningun estado de mi sistema hay un deadlock
+
+F = <> F1           en algun momento del futuro vale F1
+
+<> estado == final  en algun momento llego al estado final.
+
+[] (pedido => <> respuesta)     tipica propiedad de liveness
+```
 
 #### WAIT-FREEDOM
 
@@ -516,33 +709,52 @@ que estará en CRIT.
 
 Intuicion: Libre de procesos que esperan para siempre.
 
+![WAIT FREEDOM](img/sync/prop-wait-freedom.png)
+
 #### FAIRNESS - Equanimidad
 
-.
+Para toda ejecucion $\tau$ y todo proceso $i$, **si** $i$ *puede* hacer una
+transicion $l_i$ en una cantidad infinita de estados $\tau$ **entonces**
+existe un $k$ tal que $\tau_k \xrightarrow{l_i} \tau_{k+1}$
 
 #### EXCL - Exclusión Mutua
 
-Para toda ejecución y estado, no puede haber más de un proceso i que esté en el
-mismo punto en el tiempo en CRIT.
+Para toda ejecución $\tau$ y estado $\tau_k$, no puede haber más de **un**
+proceso $i$ tal que $\tau_k(i) = CRIT$
+
+*EXCL* $\equiv \square \# CRIT \leq 1$
 
 #### LOCK-FREEDOM - Progreso
 
 Para toda ejecución y estado, si hay un proceso en TRY, y ninguno en CRIT,
 entonces hay un estado posterior tal que algún proceso está en CRIT.
 
+*LOCK-FREEDOM* $\equiv \square ( \#TRY \geq 1 \wedge \#CRIT = 0 \Rightarrow \lozenge
+\#CRIT > 0)$
+
 #### DEADLOCK/LOCKOUT/STARVATION-FREEDOM - Progreso global dependiente
 
-IN: Si está en try, en algún momento está en crit
-OUT: Si está en crit, en algún momento sale
+Predicados auxiliares:
 
-Para toda ejecución, si para todo estado y proceso i que está en crit, existe un
-estado tal que sale, entonces para todo estado posterior y todo proceso
+- *Lograr entrar*
+
+  $IN(i) \equiv i \in TRY \Rightarrow \lozenge i \in CRIT$
+
+- *Salir*
+  
+  $OUT(i) \equiv i \in CRIT \Rightarrow \lozenge i \in REM$
+
+Para toda ejecución, si para todo estado y proceso i que está en crit, existe
+un estado tal que sale, entonces para todo estado posterior y todo proceso
 diferente, si intenta de entrar existe un estado para el cual entra.
 
 Que todos salgan implican que todos van a entrar en algún momento.
+
+*STARVATION-FREEDOM* $\equiv \forall i \square OUT(i) \Rightarrow \forall i \square
+IN(i)$
 
 #### WAIT-FREEDOM - Progreso global absoluto
 
 Todo proceso entra a la sección crítica
 
-$WAIT-FREEDOM \equiv \forall i \square IN(i)$
+*WAIT-FREEDOM* $\equiv \forall i \square IN(i)$
