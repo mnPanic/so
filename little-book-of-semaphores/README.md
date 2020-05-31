@@ -37,6 +37,14 @@ Notas de [*The little book of semaphores*][book]
     - [Readers-writers problem](#readers-writers-problem)
       - [Lightswitch](#lightswitch)
       - [Starvation](#starvation)
+      - [Solucion](#solucion)
+      - [Writer-priority readers-writers](#writer-priority-readers-writers)
+    - [No-starve mutex](#no-starve-mutex)
+    - [Dining philosophers](#dining-philosophers)
+      - [Deadlock #5](#deadlock-5)
+      - [Dining philosophers solution #1](#dining-philosophers-solution-1)
+      - [Solucion asimetrica](#solucion-asimetrica)
+      - [Solución de Tanenbaum](#solución-de-tanenbaum)
 
 ## Intro
 
@@ -557,3 +565,252 @@ apaga.
 Es posible que no paren de entrar readers y que nunca le toque a los writers.
 Para evitar eso, se puede hacer que cuando llegue un writer, los readers
 existentes puedan terminar, pero que no puedan entrar readers adicionales.
+
+#### Solucion
+
+```python
+int readers = 0
+mutex = Semaphore(1)
+roomEmpty = Semaphore(1)    # 1 si no hay threads en CRIT, 0 sino.
+
+turnstile = Semaphore(1)
+
+## Reader
+mutex.wait()
+    readers += 1
+    if readers == 1:
+        roomEmpty.wait()    # primer reader lockea
+mutex.signal()
+
+turnstile.wait()
+turnstile.signal()
+
+mutex.wait()
+    readers -= 1
+    if readers == 0:
+        roomEmpty.signal()  # ultimo reader desbloquea
+mutex.signal()
+
+## Writer
+# pass through the turnstile
+# si llega un writer, bloquea acá dejando a los readers siguientes detrás de él.
+turnstile.wait()
+
+  roomEmpty.wait()
+    # CRIT de este writer
+  roomEmpty.signal()
+
+turnstile.signal()
+```
+
+Y usando la nueva primitiva `Lightswitch`,
+
+```python
+readSwitch = Lightswitch()
+roomEmpty = Semaphore(1)
+turnstile = Semaphore(1)
+
+## Reader
+turnstile.wait()
+turnstile.signal()
+
+readSwitch.lock(roomEmpty)
+  # CRIT para readers
+readSwitch.unlock(roomEmpty)
+
+## Writer
+# pass through the turnstile
+# si llega un writer, bloquea acá dejando a los readers siguientes detrás de él.
+turnstile.wait()
+
+  roomEmpty.wait()
+    # CRIT de este writer
+
+turnstile.signal()
+roomEmpty.signal()
+```
+
+#### Writer-priority readers-writers
+
+Pero y si quisieramos darle prioridad a los writers? Es decir, que una vez que
+llegue un writer al sistema, los readers no deberian poder entrar hasta que
+hayan salido todos los writers.
+
+```python
+readSwitch = LightSwitch()
+writeSwitch = LightSwitch()
+
+noReaders = Semaphore(1)
+noWriters = Semaphore(1)
+
+## Reader
+noReaders.wait()
+  readSwitch.lock(noWriters)
+noReaders.signal()
+
+    # CRIT
+
+readSwitch.unlock(noWriters)
+
+## Writer
+writeSwitch.lock(noReaders)
+    noWriters.wait()
+        # CRIT
+    noWriters.signal()
+writeSwitch.unlock(noReaders)
+```
+
+Un problema de esta solución es que ahora puede haber starvation de los readers.
+
+### No-starve mutex
+
+En la sección anterior, se vio lo llamado **categorical starvation**, en la cual
+una categoría de threads (readers) puede causar que otra categoría (writers)
+sufra inanición.
+
+En un nivel más básico, se puede resolver el problema de **thread starvation**,
+en el cual un thread espera indefinidamente mientras otros proceden.
+
+_mas en el libro_
+
+### Dining philosophers
+
+El problema fue planteado originalmente por Dijkstra.
+
+5 filosofos, que representan threads, se acercan a una mesa con 5 tenedores, 5
+platos y un gran bowl de fideos. Ejecutan el siguiente loop
+
+```c
+while true:
+    think()
+    get_forks()
+    eat()
+    put_forks()
+```
+
+Los tenedores representan recursos que los threads tienen que tener de forma
+exclusiva para poder progresar.
+
+1. Los filosofos necesitan *dos* tenedores para comer.
+2. Tienen una variable local `i = 0..4` que identifica a cada uno
+3. Los tenedores estan numerados de 0 a 4, de forma tal que el filosofo tiene el
+  tenedor i a la derecha y el i+1 a la izquierda.
+
+![Diagrama](dining-philosophers.png)
+
+Debemos implementar `get_forks` y `put_forks` de forma tal que
+
+1. Solo un filosofo puede tener un tenedor a la vez
+2. No debe haber deadlocks
+3. No debe haber starvation de un filosofo esperando un tenedor
+4. Mas de un filosofo debe poder comer a la vez. Debería permitir la máxima
+   cantidad de concurrencia.
+
+```python
+# funciones utiles para obtener para un filosofo
+# los tenedores que le corresponden
+def left(i): return i
+def right(i): return (i + 1) % 5
+```
+
+#### Deadlock #5
+
+```python
+forks = [Semaphore(1) for i in range(5)]
+
+def get_forks(i):
+    fork[right(i)].wait()
+    fork[left(i)].wait()
+
+def put_forks(i):
+    fork[right(i)].signal()
+    fork[left(i)].signal()
+```
+
+Esta solución es incorrecta ya que no cumple con la condición 4, se puede dar un
+deadlock si todos los filosofos tienen el tenedor de su izquierda, y están
+esperando al de la derecha.
+
+#### Dining philosophers solution #1
+
+Si hubiera 4 filosofos, entonces sería imposible que haya un deadlock, ya que
+nunca se completaria el circulo.
+
+```python
+forks = [Semaphore(1) for i in range(5)]
+footman = Semaphore(4)
+
+def get_forks(i):
+    footman.wait() # si hay 4 ya, espera a que se vaya uno
+    fork[right(i)].wait()
+    fork[left(i)].wait()
+
+def put_forks(i):
+    fork[right(i)].signal()
+    fork[left(i)].signal()
+    footman.signal()
+```
+
+Si hay solo 4 filosofos, entonces en el peor caso todos tienen 1 tenedor y
+esperan otro. Pero quedaría uno libre, el cual tiene dos vecinos, que tienen
+otro tenedor en la mano. Por lo tanto, cualquiera de sus vecinos puede tomarlo y
+comer.
+
+Además de evitar el deadlock, esta solución evita el starvation de los
+filósofos.
+
+#### Solucion asimetrica
+
+Si hay al menos un leftie y un rightie (es decir, que agarran respectivamente o
+el tenedor izquierdo o el derecho), entonces no puede haber deadlock.
+
+Supongo que si lo hay. Sea i un filosofo de los que están con dedlock.
+
+Si es leftie, entonces el que está a su derecha es un leftie, porque sino
+podría haberlo agarrado. Esto continúa hasta volver al inicial, que también es
+leftie. Luego todos son lefties. Absurdo.
+
+El caso de rightie es análogo.
+
+#### Solución de Tanenbaum
+
+Por cada filósofo hay una variable de estado que indica si está pensando,
+comiendo, o esperando para comer, "hungry". Y un semáforo que indica si el
+filósofo puede comenzar a comer.
+
+```python
+state = ['thinking'] * 5
+sem = [Semaphore(0)] * 5
+mutex = Semaphore(1)
+
+def get_fork(i):
+    mutex.wait()
+        state[i] = 'hungry'
+        test(i)
+    mutex.signal()
+    sem[i].wait()
+
+def put_fork(i):
+    mutex.wait()
+        state[i] = "thinking"
+        test(right(i))
+        test(left(i))
+    mutex.signal()
+
+def test(i):
+    # retorna si el i-esimo filosofo puede comenzar a comer, y en
+    # caso de que pueda, hace signal al semaforo i-esimo.
+    if state[i] == "hungry" and
+       state[left(i)] != "eating" and
+       state[right(i)] != "eating":
+            state[i] = "eating"
+            sem[i].signal()
+```
+
+Hay dos formas por las cuales un filósofo podría comenzar a comer
+
+- El filosofo ejecuta `get_fork` y encuentra los forks disponibles, procede
+  inmediatamente.
+- Uno de sus vecinos esta comiendo y el filosofo bloquea su propio semaforo.
+  Eventualmente, uno de los vecinos terminara, punto en el cual ejecuta test en
+  sus dos vecinos.
