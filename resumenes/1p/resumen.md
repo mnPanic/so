@@ -32,7 +32,6 @@
     - [Politicas de scheduling](#politicas-de-scheduling)
     - [Diagramas de GANTT](#diagramas-de-gantt)
     - [Métricas de rendimiento](#métricas-de-rendimiento)
-  - [Memoria](#memoria-1)
   - [Sincronizacion entre procesos](#sincronizacion-entre-procesos)
     - [Secciones críticas](#secciones-críticas)
     - [Deadlock](#deadlock)
@@ -56,6 +55,25 @@
       - [LOCK-FREEDOM - Progreso](#lock-freedom---progreso)
       - [DEADLOCK/LOCKOUT/STARVATION-FREEDOM - Progreso global dependiente](#deadlocklockoutstarvation-freedom---progreso-global-dependiente)
       - [WAIT-FREEDOM - Progreso global absoluto](#wait-freedom---progreso-global-absoluto)
+  - [Memory](#memory)
+    - [MM](#mm)
+    - [Operaciones](#operaciones)
+    - [Fragmentación](#fragmentación)
+    - [Organización de la memoria](#organización-de-la-memoria)
+      - [Memoria virtual](#memoria-virtual)
+      - [Segmentación](#segmentación)
+      - [Paginacion](#paginacion)
+        - [PTE](#pte)
+        - [TLB](#tlb)
+    - [Algoritmos de remoción](#algoritmos-de-remoción)
+      - [Ejemplo de remoción](#ejemplo-de-remoción)
+    - [Algoritmos de elección de bloques libres](#algoritmos-de-elección-de-bloques-libres)
+      - [Ejemplo de elección de bloques](#ejemplo-de-elección-de-bloques)
+        - [First Fit](#first-fit)
+        - [Best Fit](#best-fit)
+        - [Worst Fit](#worst-fit)
+        - [Resultados](#resultados)
+    - [Page Faults (#PF)](#page-faults-pf)
 
 ## SOs
 
@@ -528,7 +546,6 @@ No siempre son compatibles entre ellas
 - *Turnaround*: Tiempo total que le toma a un proceso ejecutar completamente.
 - *Waiting time*: Tiempo que un proceso pasa en estado *ready*.
 
-## Memoria
 
 ## Sincronizacion entre procesos
 
@@ -815,3 +832,192 @@ IN(i)$
 Todo proceso entra a la sección crítica
 
 *WAIT-FREEDOM* $\equiv \forall i \square IN(i)$
+
+
+## Memory
+
+### MM
+
+El *Memory Manager* (MM) se encarga de
+
+- Manejar el espacio libre y ocupado
+- Asignar y liberar memoria
+- Controlar el **swapping** (cambiar entre disco y memoria)
+
+Y tiene que lidiar con los siguientes problemas
+
+- Reubicación (context switch, swapping)
+- Protección (memoria privada de los procesos)
+- Manejo del espacio libre (evitando la *fragmentación*)
+
+También hay que tener en cuenta que la memoria fisica se divide en unidades de
+direccionamiento, donde la mínima es 1 byte.
+
+### Operaciones
+
+- **Asignar**: Reservar una porción de memoria para un proceso.
+  Esta pasa a estar *ocupada* por el proceso que la solicitó, y tenemos que
+  saber quién es ese dueño.
+
+- **Liberar**: Una porción de memoria vuelve a estar disponible para cualquier
+  proceso.
+
+### Fragmentación
+
+> Había una cantidad de espacio libre para meter un auto más, pero partido
+> en pedazos tan chiquitos que no entraba a fines prácticos.
+> La calle estaría **fragmentada**
+
+La fragmentación es cuando tenemos suficiente memoria para etender una
+solicitud, pero no es continua. Si no se soluciona, el problema se hace
+arbitrariamente grande.
+
+Hay dos tipos
+
+- Fragmentación externa: Hay bloques libres pero pequeños y dispersos
+- Fragmentación interna: Espacio desperdiciado dentro de los propios bloques
+  (por ejemplo, que pasa si un proceso me pide 4K pero necesita menos?)
+
+### Organización de la memoria
+
+- **Bitmap**
+
+  Dividis a la memoria en bloques de igual tamaño, y luego cada posición del
+  bitmap representa un bloque, que tiene 0 si está libre y 1 si está ocupado.
+
+  Asignar y liberar es O(1) pero buscar bloques consecutivos libres es O(n).
+
+- **Linked list**
+
+  Cada nodo de la lista representa un proceso o un bloque libre, en cuyo caso
+  figuran el tamaño y sus limites.
+
+  Asignar y liberar es O(1), pero como decido donde?
+
+![Comparison](img/memory/bitmap-and-linked-list.png)
+
+Para agruparla, se puede optar por bloques de tamaño fijo o variable. Y hay
+distintos mecanismos para poder lograrlo,
+
+- Segmentación
+- Paginación
+- Segmentación + Paginación.
+
+[Referencia de mecanismos en resumen de orga2](https://github.com/mnPanic/orga2/blob/master/resumen/3_memoria.md)
+
+#### Memoria virtual
+
+La **memoria virtual** consiste en *virtualizar* el espacio de direcciones.
+
+Hacerle creer al proceso que dispone más memoria del que realmente tiene. Para
+esto es utilizado el swap.
+
+#### Segmentación
+
+Separa la memoria en segmentos de tamaño variable. Estos están definidos por la
+**base** (dónde comienza) y el **límite** (hasta dónde llega).
+
+Se accede mediante direcciones lógicas
+
+#### Paginacion
+
+##### PTE
+
+- Page frame
+- Bit de present
+- Bits de protección
+- Bit de *dirty* que indica si una pagina fue modificada desde que se cargó a
+  disco. Solo páginas *dirty* deben ser escritas en disco al desalojarlas.
+- Bit de *referenciada* que indica si una página fue accedida desde que se cargó
+  de disco. Se usa para decidir que página bajar a disco.
+
+##### TLB
+
+El *Translation Lookaside Buffer* es un caché de traducciones. Se utiliza para
+evitar que las traducciones tomen mucho tiempo, ya que para cada una es
+necesario ir a la memoria.
+
+### Algoritmos de remoción
+
+- **FIFO**: First in, first out
+
+- **Second Chance**
+
+  Es como fifo, pero si la página que voy a bajar fue referenciada, la considero
+  como que recién fue subida y paso a la siguiente. Esta pasa al fondo.
+
+- **Least Recently Used (LRU)**
+
+  Cada vez que una página es referenciada va al fondo.
+
+  La idea es que la que se usó menos recientemente tiene menor probabilidade
+  volver a ser usada en lo inmediato.
+
+- **Not Recently Used (NRU)**
+
+  Se establece una prioridad para desalojar una página:
+
+  1. No fueron referenciadas ni modificadas
+  2. Referenciadas pero no modificadas
+  3. Modificadas
+
+#### Ejemplo de remoción
+
+![Ejemplo algoritmos de remocion](img/memory/ejemplo-remocion.png)
+
+### Algoritmos de elección de bloques libres
+
+En una lista de bloques
+
+- **First Fit**
+
+  Asigno en el primer bloque donde entra.
+  Es rápido pero tiende a fragmentar la memoria en bloques grandes.
+
+- **Best Fit**
+
+  Me fijo en donde entra maś justo. La que minimiza el espacio de desperdicio.
+
+  Es mas lento, y tampoco es mejor, llena la memoria de pequeños bloques
+  inservibles.
+
+- **Worst Fit**
+
+  Máximo espacio de desperdicio.
+
+- **Quick fit**
+
+  Usa lista de bloques de determinados tamaños en una
+  estructura de datos a parte.
+
+Todos fallan por ser muy simples.
+
+#### Ejemplo de elección de bloques
+
+##### First Fit
+
+![First Fit](img/memory/asignacion-first-fit.png)
+
+##### Best Fit
+
+![Best Fit](img/memory/asignacion-best-fit.png)
+
+##### Worst Fit
+
+![Worst Fit](img/memory/asignacion-worst-fit.png)
+
+##### Resultados
+
+![Resultados](img/memory/asignacion-resultados.png)
+
+### Page Faults (#PF)
+
+1. Un proceso accede a una dirección virtual de memoria.
+2. La MMU traduce la dirección virtual a física
+3. Lee el atributo *present* de la memoria
+4. Si no lo está, se produce una interrupción *Page Fault*
+5. Al atender la interrupción, se fija si la memoria está llena, en cuyo caso se
+   libera un bloque mediante algún algoritmo de remoción.
+6. Si la pagina que se va a desalojar fue modificada, entonces se baja a disco.
+7. Se carga en el lugar liberado la página solicitada
+8. Se reanuda la ejecución del proceso.

@@ -82,7 +82,6 @@
 <li><a href="#m%C3%A9tricas-de-rendimiento">Métricas de rendimiento</a></li>
 </ul>
 </li>
-<li><a href="#memoria-1">Memoria</a></li>
 <li><a href="#sincronizacion-entre-procesos">Sincronizacion entre procesos</a>
 <ul>
 <li><a href="#secciones-cr%C3%ADticas">Secciones críticas</a></li>
@@ -113,6 +112,43 @@
 <li><a href="#wait-freedom---progreso-global-absoluto">WAIT-FREEDOM - Progreso global absoluto</a></li>
 </ul>
 </li>
+</ul>
+</li>
+<li><a href="#memory">Memory</a>
+<ul>
+<li><a href="#mm">MM</a></li>
+<li><a href="#operaciones">Operaciones</a></li>
+<li><a href="#fragmentaci%C3%B3n">Fragmentación</a></li>
+<li><a href="#organizaci%C3%B3n-de-la-memoria">Organización de la memoria</a>
+<ul>
+<li><a href="#memoria-virtual">Memoria virtual</a></li>
+<li><a href="#segmentaci%C3%B3n">Segmentación</a></li>
+<li><a href="#paginacion">Paginacion</a>
+<ul>
+<li><a href="#pte">PTE</a></li>
+<li><a href="#tlb">TLB</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#algoritmos-de-remoci%C3%B3n">Algoritmos de remoción</a>
+<ul>
+<li><a href="#ejemplo-de-remoci%C3%B3n">Ejemplo de remoción</a></li>
+</ul>
+</li>
+<li><a href="#algoritmos-de-elecci%C3%B3n-de-bloques-libres">Algoritmos de elección de bloques libres</a>
+<ul>
+<li><a href="#ejemplo-de-elecci%C3%B3n-de-bloques">Ejemplo de elección de bloques</a>
+<ul>
+<li><a href="#first-fit">First Fit</a></li>
+<li><a href="#best-fit">Best Fit</a></li>
+<li><a href="#worst-fit">Worst Fit</a></li>
+<li><a href="#resultados">Resultados</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#page-faults-pf">Page Faults (#PF)</a></li>
 </ul>
 </li>
 </ul>
@@ -523,7 +559,6 @@ unidad de tiempo.</li>
 <li><em>Turnaround</em>: Tiempo total que le toma a un proceso ejecutar completamente.</li>
 <li><em>Waiting time</em>: Tiempo que un proceso pasa en estado <em>ready</em>.</li>
 </ul>
-<h2 id="memoria-1">Memoria</h2>
 <h2 id="sincronizacion-entre-procesos">Sincronizacion entre procesos</h2>
 <p>Hacer que los procesos puedan cooperar sin estorbarse.</p>
 <p>Toda ejecución debería dar un resultado equivalente a <em>alguna</em> ejecución
@@ -751,6 +786,170 @@ IN(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden
 <h4 id="wait-freedom---progreso-global-absoluto">WAIT-FREEDOM - Progreso global absoluto</h4>
 <p>Todo proceso entra a la sección crítica</p>
 <p><em>WAIT-FREEDOM</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo><mi mathvariant="normal">∀</mi><mi>i</mi><mi mathvariant="normal">□</mi><mi>I</mi><mi>N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\equiv \forall i \square IN(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∀</span><span class="mord mathdefault">i</span><span class="mord amsrm">□</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span></span></span></span></p>
+<h2 id="memory">Memory</h2>
+<h3 id="mm">MM</h3>
+<p>El <em>Memory Manager</em> (MM) se encarga de</p>
+<ul>
+<li>Manejar el espacio libre y ocupado</li>
+<li>Asignar y liberar memoria</li>
+<li>Controlar el <strong>swapping</strong> (cambiar entre disco y memoria)</li>
+</ul>
+<p>Y tiene que lidiar con los siguientes problemas</p>
+<ul>
+<li>Reubicación (context switch, swapping)</li>
+<li>Protección (memoria privada de los procesos)</li>
+<li>Manejo del espacio libre (evitando la <em>fragmentación</em>)</li>
+</ul>
+<p>También hay que tener en cuenta que la memoria fisica se divide en unidades de
+direccionamiento, donde la mínima es 1 byte.</p>
+<h3 id="operaciones">Operaciones</h3>
+<ul>
+<li>
+<p><strong>Asignar</strong>: Reservar una porción de memoria para un proceso.
+Esta pasa a estar <em>ocupada</em> por el proceso que la solicitó, y tenemos que
+saber quién es ese dueño.</p>
+</li>
+<li>
+<p><strong>Liberar</strong>: Una porción de memoria vuelve a estar disponible para cualquier
+proceso.</p>
+</li>
+</ul>
+<h3 id="fragmentación">Fragmentación</h3>
+<blockquote>
+<p>Había una cantidad de espacio libre para meter un auto más, pero partido
+en pedazos tan chiquitos que no entraba a fines prácticos.
+La calle estaría <strong>fragmentada</strong></p>
+</blockquote>
+<p>La fragmentación es cuando tenemos suficiente memoria para etender una
+solicitud, pero no es continua. Si no se soluciona, el problema se hace
+arbitrariamente grande.</p>
+<p>Hay dos tipos</p>
+<ul>
+<li>Fragmentación externa: Hay bloques libres pero pequeños y dispersos</li>
+<li>Fragmentación interna: Espacio desperdiciado dentro de los propios bloques
+(por ejemplo, que pasa si un proceso me pide 4K pero necesita menos?)</li>
+</ul>
+<h3 id="organización-de-la-memoria">Organización de la memoria</h3>
+<ul>
+<li>
+<p><strong>Bitmap</strong></p>
+<p>Dividis a la memoria en bloques de igual tamaño, y luego cada posición del
+bitmap representa un bloque, que tiene 0 si está libre y 1 si está ocupado.</p>
+<p>Asignar y liberar es O(1) pero buscar bloques consecutivos libres es O(n).</p>
+</li>
+<li>
+<p><strong>Linked list</strong></p>
+<p>Cada nodo de la lista representa un proceso o un bloque libre, en cuyo caso
+figuran el tamaño y sus limites.</p>
+<p>Asignar y liberar es O(1), pero como decido donde?</p>
+</li>
+</ul>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/bitmap-and-linked-list.png" alt="Comparison"></p>
+<p>Para agruparla, se puede optar por bloques de tamaño fijo o variable. Y hay
+distintos mecanismos para poder lograrlo,</p>
+<ul>
+<li>Segmentación</li>
+<li>Paginación</li>
+<li>Segmentación + Paginación.</li>
+</ul>
+<p><a href="https://github.com/mnPanic/orga2/blob/master/resumen/3_memoria.html">Referencia de mecanismos en resumen de orga2</a></p>
+<h4 id="memoria-virtual">Memoria virtual</h4>
+<p>La <strong>memoria virtual</strong> consiste en <em>virtualizar</em> el espacio de direcciones.</p>
+<p>Hacerle creer al proceso que dispone más memoria del que realmente tiene. Para
+esto es utilizado el swap.</p>
+<h4 id="segmentación">Segmentación</h4>
+<p>Separa la memoria en segmentos de tamaño variable. Estos están definidos por la
+<strong>base</strong> (dónde comienza) y el <strong>límite</strong> (hasta dónde llega).</p>
+<p>Se accede mediante direcciones lógicas</p>
+<h4 id="paginacion">Paginacion</h4>
+<h5 id="pte">PTE</h5>
+<ul>
+<li>Page frame</li>
+<li>Bit de present</li>
+<li>Bits de protección</li>
+<li>Bit de <em>dirty</em> que indica si una pagina fue modificada desde que se cargó a
+disco. Solo páginas <em>dirty</em> deben ser escritas en disco al desalojarlas.</li>
+<li>Bit de <em>referenciada</em> que indica si una página fue accedida desde que se cargó
+de disco. Se usa para decidir que página bajar a disco.</li>
+</ul>
+<h5 id="tlb">TLB</h5>
+<p>El <em>Translation Lookaside Buffer</em> es un caché de traducciones. Se utiliza para
+evitar que las traducciones tomen mucho tiempo, ya que para cada una es
+necesario ir a la memoria.</p>
+<h3 id="algoritmos-de-remoción">Algoritmos de remoción</h3>
+<ul>
+<li>
+<p><strong>FIFO</strong>: First in, first out</p>
+</li>
+<li>
+<p><strong>Second Chance</strong></p>
+<p>Es como fifo, pero si la página que voy a bajar fue referenciada, la considero
+como que recién fue subida y paso a la siguiente. Esta pasa al fondo.</p>
+</li>
+<li>
+<p><strong>Least Recently Used (LRU)</strong></p>
+<p>Cada vez que una página es referenciada va al fondo.</p>
+<p>La idea es que la que se usó menos recientemente tiene menor probabilidade
+volver a ser usada en lo inmediato.</p>
+</li>
+<li>
+<p><strong>Not Recently Used (NRU)</strong></p>
+<p>Se establece una prioridad para desalojar una página:</p>
+<ol>
+<li>No fueron referenciadas ni modificadas</li>
+<li>Referenciadas pero no modificadas</li>
+<li>Modificadas</li>
+</ol>
+</li>
+</ul>
+<h4 id="ejemplo-de-remoción">Ejemplo de remoción</h4>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/ejemplo-remocion.png" alt="Ejemplo algoritmos de remocion"></p>
+<h3 id="algoritmos-de-elección-de-bloques-libres">Algoritmos de elección de bloques libres</h3>
+<p>En una lista de bloques</p>
+<ul>
+<li>
+<p><strong>First Fit</strong></p>
+<p>Asigno en el primer bloque donde entra.
+Es rápido pero tiende a fragmentar la memoria en bloques grandes.</p>
+</li>
+<li>
+<p><strong>Best Fit</strong></p>
+<p>Me fijo en donde entra maś justo. La que minimiza el espacio de desperdicio.</p>
+<p>Es mas lento, y tampoco es mejor, llena la memoria de pequeños bloques
+inservibles.</p>
+</li>
+<li>
+<p><strong>Worst Fit</strong></p>
+<p>Máximo espacio de desperdicio.</p>
+</li>
+<li>
+<p><strong>Quick fit</strong></p>
+<p>Usa lista de bloques de determinados tamaños en una
+estructura de datos a parte.</p>
+</li>
+</ul>
+<p>Todos fallan por ser muy simples.</p>
+<h4 id="ejemplo-de-elección-de-bloques">Ejemplo de elección de bloques</h4>
+<h5 id="first-fit">First Fit</h5>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/asignacion-first-fit.png" alt="First Fit"></p>
+<h5 id="best-fit">Best Fit</h5>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/asignacion-best-fit.png" alt="Best Fit"></p>
+<h5 id="worst-fit">Worst Fit</h5>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/asignacion-worst-fit.png" alt="Worst Fit"></p>
+<h5 id="resultados">Resultados</h5>
+<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/asignacion-resultados.png" alt="Resultados"></p>
+<h3 id="page-faults-pf">Page Faults (#PF)</h3>
+<ol>
+<li>Un proceso accede a una dirección virtual de memoria.</li>
+<li>La MMU traduce la dirección virtual a física</li>
+<li>Lee el atributo <em>present</em> de la memoria</li>
+<li>Si no lo está, se produce una interrupción <em>Page Fault</em></li>
+<li>Al atender la interrupción, se fija si la memoria está llena, en cuyo caso se
+libera un bloque mediante algún algoritmo de remoción.</li>
+<li>Si la pagina que se va a desalojar fue modificada, entonces se baja a disco.</li>
+<li>Se carga en el lugar liberado la página solicitada</li>
+<li>Se reanuda la ejecución del proceso.</li>
+</ol>
 
     </body>
     </html>
