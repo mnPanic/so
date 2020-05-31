@@ -25,6 +25,99 @@
     </head>
     <body class="vscode-light">
         <h1 id="resumen-para-el-primer-parcial-de-so">Resumen para el primer parcial de SO</h1>
+<h2 id="contenidos">Contenidos</h2>
+<ul>
+<li><a href="#resumen-para-el-primer-parcial-de-so">Resumen para el primer parcial de SO</a>
+<ul>
+<li><a href="#contenidos">Contenidos</a></li>
+<li><a href="#sos">SOs</a>
+<ul>
+<li><a href="#elementos-basicos-de-un-so">Elementos basicos de un SO</a></li>
+<li><a href="#procesos">Procesos</a>
+<ul>
+<li><a href="#memoria">Memoria</a></li>
+<li><a href="#que-puede-hacer">Que puede hacer</a>
+<ul>
+<li><a href="#syscalls">Syscalls</a></li>
+</ul>
+</li>
+<li><a href="#%C3%A1rbol-de-procesos">Árbol de procesos</a></li>
+<li><a href="#fork">Fork</a></li>
+</ul>
+</li>
+<li><a href="#otras-funciones">Otras funciones</a></li>
+<li><a href="#esperar-a-que-un-proceso-hijo-termine">Esperar a que un proceso hijo termine</a></li>
+<li><a href="#copy-on-write">Copy on write</a></li>
+</ul>
+</li>
+<li><a href="#ipc---interprocess-communication">IPC - InterProcess Communication</a>
+<ul>
+<li><a href="#file-descriptors-fd">File Descriptors (FD)</a></li>
+<li><a href="#modelo-de-flujo-de-comunicacion">Modelo de flujo de comunicacion</a></li>
+<li><a href="#interaccion-con-archivos">Interaccion con archivos</a></li>
+<li><a href="#dup2">dup2</a>
+<ul>
+<li><a href="#esquema-de-redireccion">Esquema de redireccion</a></li>
+</ul>
+</li>
+<li><a href="#pipes">Pipes</a>
+<ul>
+<li><a href="#pipes-en-pcb">Pipes en PCB</a></li>
+<li><a href="#comunicacion-entre-procesos-con-pipes">Comunicacion entre procesos con pipes</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#scheduling">Scheduling</a>
+<ul>
+<li><a href="#context-switch">Context Switch</a></li>
+<li><a href="#estados-de-un-proceso">Estados de un proceso</a>
+<ul>
+<li><a href="#tipos-de-schediling">Tipos de schediling</a></li>
+</ul>
+</li>
+<li><a href="#nomenclaturas">Nomenclaturas</a></li>
+<li><a href="#politicas-de-scheduling">Politicas de scheduling</a></li>
+<li><a href="#diagramas-de-gantt">Diagramas de GANTT</a></li>
+<li><a href="#m%C3%A9tricas-de-rendimiento">Métricas de rendimiento</a></li>
+</ul>
+</li>
+<li><a href="#memoria-1">Memoria</a></li>
+<li><a href="#sincronizacion-entre-procesos">Sincronizacion entre procesos</a>
+<ul>
+<li><a href="#secciones-cr%C3%ADticas">Secciones críticas</a></li>
+<li><a href="#deadlock">Deadlock</a></li>
+<li><a href="#primitivas-de-sync">Primitivas de sync</a>
+<ul>
+<li><a href="#tas">TAS</a></li>
+<li><a href="#semaforos">Semaforos</a></li>
+<li><a href="#mutex">Mutex</a></li>
+<li><a href="#atomicos">Atomicos</a></li>
+<li><a href="#tas-lock--spin-lock">TAS Lock / Spin Lock</a></li>
+<li><a href="#ttaslock--local-spinning">TTASLock / Local spinning</a></li>
+<li><a href="#cas">CAS</a></li>
+</ul>
+</li>
+<li><a href="#problemas-de-sync">Problemas de sync</a></li>
+<li><a href="#correctitud">Correctitud</a></li>
+<li><a href="#propiedades">Propiedades</a>
+<ul>
+<li><a href="#tipos">Tipos</a></li>
+<li><a href="#modelo-de-proceso">Modelo de proceso</a></li>
+<li><a href="#ltl">LTL</a></li>
+<li><a href="#wait-freedom">WAIT-FREEDOM</a></li>
+<li><a href="#fairness---equanimidad">FAIRNESS - Equanimidad</a></li>
+<li><a href="#excl---exclusi%C3%B3n-mutua">EXCL - Exclusión Mutua</a></li>
+<li><a href="#lock-freedom---progreso">LOCK-FREEDOM - Progreso</a></li>
+<li><a href="#deadlocklockoutstarvation-freedom---progreso-global-dependiente">DEADLOCK/LOCKOUT/STARVATION-FREEDOM - Progreso global dependiente</a></li>
+<li><a href="#wait-freedom---progreso-global-absoluto">WAIT-FREEDOM - Progreso global absoluto</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
 <h2 id="sos">SOs</h2>
 <p>Algunas definiciones</p>
 <ul>
@@ -629,21 +722,35 @@ existe un <span class="katex"><span class="katex-mathml"><math xmlns="http://www
 -12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
  151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.638891em;vertical-align:-0.208331em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.208331em;"><span></span></span></span></span></span></span></span></span></span></p>
 <h4 id="excl---exclusión-mutua">EXCL - Exclusión Mutua</h4>
-<p>Para toda ejecución y estado, no puede haber más de un proceso i que esté en el
-mismo punto en el tiempo en CRIT.</p>
+<p>Para toda ejecución <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span></span></span></span> y estado <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>τ</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">\tau_k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>, no puede haber más de <strong>un</strong>
+proceso <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.65952em;vertical-align:0em;"></span><span class="mord mathdefault">i</span></span></span></span> tal que <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>τ</mi><mi>k</mi></msub><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo><mo>=</mo><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">\tau_k(i) = CRIT</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span></span></span></span></p>
+<p><em>EXCL</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo><mi mathvariant="normal">□</mi><mi mathvariant="normal">#</mi><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi><mo>≤</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\equiv \square \# CRIT \leq 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord amsrm">□</span><span class="mord">#</span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span></span></span></span></p>
 <h4 id="lock-freedom---progreso">LOCK-FREEDOM - Progreso</h4>
 <p>Para toda ejecución y estado, si hay un proceso en TRY, y ninguno en CRIT,
 entonces hay un estado posterior tal que algún proceso está en CRIT.</p>
+<p><em>LOCK-FREEDOM</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo><mi mathvariant="normal">□</mi><mo stretchy="false">(</mo><mi mathvariant="normal">#</mi><mi>T</mi><mi>R</mi><mi>Y</mi><mo>≥</mo><mn>1</mn><mo>∧</mo><mi mathvariant="normal">#</mi><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi><mo>=</mo><mn>0</mn><mo>⇒</mo><mi mathvariant="normal">◊</mi><mi mathvariant="normal">#</mi><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi><mo>&gt;</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\equiv \square ( \#TRY \geq 1 \wedge \#CRIT = 0 \Rightarrow \lozenge
+\#CRIT &gt; 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord amsrm">□</span><span class="mopen">(</span><span class="mord">#</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.22222em;">Y</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∧</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord">#</span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord amsrm">◊</span><span class="mord">#</span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span></p>
 <h4 id="deadlocklockoutstarvation-freedom---progreso-global-dependiente">DEADLOCK/LOCKOUT/STARVATION-FREEDOM - Progreso global dependiente</h4>
-<p>IN: Si está en try, en algún momento está en crit
-OUT: Si está en crit, en algún momento sale</p>
-<p>Para toda ejecución, si para todo estado y proceso i que está en crit, existe un
-estado tal que sale, entonces para todo estado posterior y todo proceso
+<p>Predicados auxiliares:</p>
+<ul>
+<li>
+<p><em>Lograr entrar</em></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mi>N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo><mo>≡</mo><mi>i</mi><mo>∈</mo><mi>T</mi><mi>R</mi><mi>Y</mi><mo>⇒</mo><mi mathvariant="normal">◊</mi><mi>i</mi><mo>∈</mo><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">IN(i) \equiv i \in TRY \Rightarrow \lozenge i \in CRIT</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69862em;vertical-align:-0.0391em;"></span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.22222em;">Y</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.80335em;vertical-align:-0.11111em;"></span><span class="mord amsrm">◊</span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span></span></span></span></p>
+</li>
+<li>
+<p><em>Salir</em></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mi>U</mi><mi>T</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo><mo>≡</mo><mi>i</mi><mo>∈</mo><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi><mo>⇒</mo><mi mathvariant="normal">◊</mi><mi>i</mi><mo>∈</mo><mi>R</mi><mi>E</mi><mi>M</mi></mrow><annotation encoding="application/x-tex">OUT(i) \equiv i \in CRIT \Rightarrow \lozenge i \in REM</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.02778em;">O</span><span class="mord mathdefault" style="margin-right:0.10903em;">U</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69862em;vertical-align:-0.0391em;"></span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.80335em;vertical-align:-0.11111em;"></span><span class="mord amsrm">◊</span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.05764em;">E</span><span class="mord mathdefault" style="margin-right:0.10903em;">M</span></span></span></span></p>
+</li>
+</ul>
+<p>Para toda ejecución, si para todo estado y proceso i que está en crit, existe
+un estado tal que sale, entonces para todo estado posterior y todo proceso
 diferente, si intenta de entrar existe un estado para el cual entra.</p>
 <p>Que todos salgan implican que todos van a entrar en algún momento.</p>
+<p><em>STARVATION-FREEDOM</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo><mi mathvariant="normal">∀</mi><mi>i</mi><mi mathvariant="normal">□</mi><mi>O</mi><mi>U</mi><mi>T</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo><mo>⇒</mo><mi mathvariant="normal">∀</mi><mi>i</mi><mi mathvariant="normal">□</mi><mi>I</mi><mi>N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\equiv \forall i \square OUT(i) \Rightarrow \forall i \square
+IN(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∀</span><span class="mord mathdefault">i</span><span class="mord amsrm">□</span><span class="mord mathdefault" style="margin-right:0.02778em;">O</span><span class="mord mathdefault" style="margin-right:0.10903em;">U</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∀</span><span class="mord mathdefault">i</span><span class="mord amsrm">□</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span></span></span></span></p>
 <h4 id="wait-freedom---progreso-global-absoluto">WAIT-FREEDOM - Progreso global absoluto</h4>
 <p>Todo proceso entra a la sección crítica</p>
-<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi><mi>A</mi><mi>I</mi><mi>T</mi><mo>−</mo><mi>F</mi><mi>R</mi><mi>E</mi><mi>E</mi><mi>D</mi><mi>O</mi><mi>M</mi><mo>≡</mo><mi mathvariant="normal">∀</mi><mi>i</mi><mi mathvariant="normal">□</mi><mi>I</mi><mi>N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">WAIT-FREEDOM \equiv \forall i \square IN(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathdefault" style="margin-right:0.13889em;">W</span><span class="mord mathdefault">A</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.13889em;">F</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.05764em;">E</span><span class="mord mathdefault" style="margin-right:0.05764em;">E</span><span class="mord mathdefault" style="margin-right:0.02778em;">D</span><span class="mord mathdefault" style="margin-right:0.02778em;">O</span><span class="mord mathdefault" style="margin-right:0.10903em;">M</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∀</span><span class="mord mathdefault">i</span><span class="mord amsrm">□</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span></span></span></span></p>
+<p><em>WAIT-FREEDOM</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo><mi mathvariant="normal">∀</mi><mi>i</mi><mi mathvariant="normal">□</mi><mi>I</mi><mi>N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\equiv \forall i \square IN(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∀</span><span class="mord mathdefault">i</span><span class="mord amsrm">□</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span></span></span></span></p>
 
     </body>
     </html>
