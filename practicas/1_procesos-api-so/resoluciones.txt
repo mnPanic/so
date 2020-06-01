@@ -1,0 +1,240 @@
+parte 1
+1. Para realizar un cambio de contexto, es necesario 
+
+- Guardar el estado del proceso actual en la PCB
+- Cargar el estado del nuevo proceso
+
+2. Soy yo o es asignar las cosas de un struct al otro?
+
+3. En una syscall hay cambio de contexto para que pueda ejecutar a nivel kernel.
+
+4. 
+
+    a. new va a ready, running va a terminated
+    ready va a running
+    running a blocked
+    blocked a ready
+
+    b.
+    - new a ready scheduler, que llegue
+    - ready a running un scheduler dispatch
+    - running a blocked que el proceso este a la espera de un estimulo externo,
+      como podria ser E/S, un semaforo, etc.
+    - running a terminated, cuando termina.
+
+5.
+a.
+
+int main() {
+    printf("abraham")
+    pid = fork()
+    if pid == 0 {
+        printf("homero")
+
+        pid = fork()
+        if pid == 0 {
+            printf("lisa")
+            exit(0)
+        }
+
+        pid = fork()
+        if pid == 0 {
+            printf("bart")
+            exit(0)
+        }
+
+        pid = fork()
+        if pid == 0 {
+            printf("maggie")
+            exit(0)
+        }
+
+        exit(0);
+    }
+
+    return 0;
+}
+
+b.
+
+a.
+
+int main() {
+    printf("abraham")
+    pid = fork()
+    if pid == 0 {
+        printf("homero")
+
+        pid_lisa = fork()
+        if pid_lisa == 0 {
+            printf("lisa")
+            exit(0)
+        }
+
+        pid_bart = fork()
+        if pid_bart == 0 {
+            printf("bart")
+            exit(0)
+        }
+
+        pid_maggie = fork()
+        if pid_maggie == 0 {
+            printf("maggie")
+            exit(0)
+        }
+
+        // homer espera a lisa
+        wait_for_child(pid_lisa)
+
+        // homer espera a maggie
+        wait_for_child(pid_maggie)
+
+        // homer espera a bart
+        wait_for_child(pid_bart)
+
+        exit(0);
+    }
+
+    // abraham espera a homer
+    wait_for_child(pid)
+
+    return 0;
+}
+
+6. system hace fork y luego exec, finalmente espera
+
+void system(const char *arg) {
+    pid = fork()
+    if pid == 0 {
+        exec(arg)
+    }
+
+    // padre
+    wait_for_child(pid)
+
+}
+
+parte 2
+
+7. TODO
+
+8.
+a.
+
+int main() {
+    pid = fork();
+    padre = get_current_pid()
+    if pid == 0 {
+        hijo(padre);
+        exit(0);
+    }
+
+    // padre
+    for(int i = 0; i < n; i+=2) {
+        bsend(hijo, i)
+        breceive(hijo)  // i + 1
+    }
+
+    return 0;
+}
+
+void hijo(pid padre) {
+    for (int i = 0; i < n; i+=2) {
+        breceive(padre);
+        bsend(padre, i + 1);
+    }
+}
+
+b.
+
+int main() {
+    pid_padre = get_current_pid()
+    pid_hijo1 = fork();
+    if pid_hijo1 == 0 {
+        hijo1(pid_padre);
+        exit(0);
+    }
+
+    pid_hijo2 = fork();
+    if pid_hijo2 == 0 {
+        hijo2(pid_padre);
+        exit(0);
+    }
+
+    // padre
+    for(int i = 0; i < n; i+=3) {
+        bsend(pid_hijo1, i)
+        breceive(pid_hijo2)  // i + 2
+    }
+
+    return 0;
+}
+
+void hijo1(pid padre, pid hijo2) {
+    for (int i = 0; i < n; i+=3) {
+        breceive(padre);
+        bsend(hijo2, i + 1);
+    }
+}
+
+void hijo2(pid padre, pid hijo1) {
+    for (int i = 0; i < n; i+=3) {
+        breceive(hijo1);
+        bsend(padre, i + 2);
+    }
+}
+
+c. ??
+
+13. queues? en donde cuando un productor escribe en la cola, no
+querria esperar a que el consumidor lo lea.
+
+14. podria pasar que se ejecute el receive antes de que mande un mensaje el hijo
+
+get_current_pid de child va a ser igual a child. Entonces el padre puede usarlo
+directamente desde ahi.
+
+15.
+
+#include <unistd.h>
+
+int main(){
+    // Creo el pipe para comunicarlos
+    int pipe_fds[2];
+    pipe(&pipe_fds);
+
+    // armo ls -al
+    pid = fork();
+    if(pid == 0){
+        // mapeo stdout al pipe
+        dup2(pipe_fds[1], 1);
+
+        // cierro los pipes
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+
+        // llamo al programa
+        char args[2] = {"ls", "-al"};
+        execv("/bin/ls", args);
+    }
+
+    // armo wl -l
+    pid = fork();
+    if(pid == 0){
+        // mapeo stdin al pipe
+        dup2(pipe_fds[0], 0);
+
+        // cierro los pipes
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+
+        // llamo al programa
+        char args[2] = {"wc", "-l"};
+        execv("usr/bin/wc", args);
+    }
+
+    // cierro los pipes
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+}
+
