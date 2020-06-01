@@ -217,7 +217,7 @@ incluso a veces una interrupcion.</p>
 tiene la posibilidad de lanzar un proceso hijo.</p>
 <p>Entonces hay un proceso que es el padre de todo el resto, <code>root</code> o <code>init</code>, que
 es el que luego lanza el <code>shell</code>.</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/api/fork.png" alt="Fork"></p>
+<p><img src="img/api/fork.png" alt="Fork"></p>
 <h4 id="fork">Fork</h4>
 <p>Es la forma que tiene el sistema operativo de crear nuevos procesos.</p>
 <pre><code class="language-text"><code><div>$ man fork
@@ -317,7 +317,7 @@ escribe en esas paginas se hace la copia: <strong>copy on write</strong>.</p>
 abiertos. Un <strong>file descriptor</strong> es un indice de esa tabla.</p>
 <p>Los FDs los usa el kernel para referenciar a los archivos abiertos que tiene
 cada proceso. Cada entry en la tabla apunta a un archivo</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/file-descriptor-illustration.jpg" alt="File descriptors"></p>
+<p><img src="img/ipc/file-descriptor-illustration.jpg" alt="File descriptors"></p>
 <p>Distintas entradas de file descriptor pueden apuntar al mismo archivo, pero
 son <em>instancias de apertura</em> distintas.</p>
 <h3 id="modelo-de-flujo-de-comunicacion">Modelo de flujo de comunicacion</h3>
@@ -390,7 +390,7 @@ dup2()
     previously open, it is silently closed before being reused.
 </div></code></code></pre>
 <h4 id="esquema-de-redireccion">Esquema de redireccion</h4>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/esquema-redireccion.png" alt="Esquema de redireccion"></p>
+<p><img src="img/ipc/esquema-redireccion.png" alt="Esquema de redireccion"></p>
 <h3 id="pipes">Pipes</h3>
 <pre><code class="language-bash"><div><span class="hljs-built_in">echo</span> <span class="hljs-string">"sistemas"</span> | wc -c
 </div></code></pre>
@@ -399,7 +399,7 @@ dup2()
 <li><code>wc -c</code> cuenta los caracteres que entran por stdin</li>
 <li>Se conecta el stdout de echo con el stdin de wc -c mediante el pipe</li>
 </ul>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/esquema-pipes.png" alt="Esquema pipe"></p>
+<p><img src="img/ipc/esquema-pipes.png" alt="Esquema pipe"></p>
 <p>Un pipe no es mas que un archivo que esta en memoria y actua como <strong>buffer</strong>
 para leer y escribir de manera <strong>secuencial</strong>.</p>
 <p>Los pipes tienen dos extremos, uno de lectura y uno de escritura, y se pueden
@@ -412,12 +412,12 @@ crear mediante la siguiente syscall</p>
 </ul>
 <h4 id="pipes-en-pcb">Pipes en PCB</h4>
 <p>Al crearse, se agregan sus extremos a la tabla de file descriptors.</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/pipe-fds.png" alt="Pipes PCB"></p>
+<p><img src="img/ipc/pipe-fds.png" alt="Pipes PCB"></p>
 <p>Y despues de hacer fork? Los file descriptors se copian, y siguen apuntando a
 los mismos extremos del pipe.</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/pipe-fds-fork.png" alt="Pipes luego de fork"></p>
+<p><img src="img/ipc/pipe-fds-fork.png" alt="Pipes luego de fork"></p>
 <h4 id="comunicacion-entre-procesos-con-pipes">Comunicacion entre procesos con pipes</h4>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/ipc/pipes-inter-process.png" alt="IPC con pipes"></p>
+<p><img src="img/ipc/pipes-inter-process.png" alt="IPC con pipes"></p>
 <p>Un proceso no puede acceder a un <em>pipe</em> anonimo que haya sido creado por un
 proceso que no este vinculado a el, por lo tanto, requieren que los procesos que
 se comunican sean descendientes del proceso que crea el pipe.</p>
@@ -436,9 +436,9 @@ de la CPU cuando se terminó su quantum.</p>
 <p>Para cambiar de proceso, debemos guardar lo que estaba haciendo para luego poder
 restaurarlo. Esto se guarda en una estructura de datos llamada <strong>PCB</strong>
 (<em>Process Control Block</em>)</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/scheduling/context-switch.png" alt="Context switch"></p>
+<p><img src="img/scheduling/context-switch.png" alt="Context switch"></p>
 <h3 id="estados-de-un-proceso">Estados de un proceso</h3>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/scheduling/process-states.png" alt="Process states"></p>
+<p><img src="img/scheduling/process-states.png" alt="Process states"></p>
 <ul>
 <li><strong>Listo</strong> (<em>ready</em>): El proceso no esta bloqueado, pero no tiene CPU
 disponible para correr. Esta esperando su turno.</li>
@@ -448,7 +448,7 @@ disponible para correr. Esta esperando su turno.</li>
 <li><strong>Terminado</strong> (<em>terminated</em>)</li>
 </ul>
 <p>Y si tiene desalojo,</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/scheduling/process-states-desalojo.png" alt="Process states"></p>
+<p><img src="img/scheduling/process-states-desalojo.png" alt="Process states"></p>
 <h4 id="tipos-de-schediling">Tipos de schediling</h4>
 <p>El scheduler debe tomar decisiones cuando un proceso</p>
 <ol>
@@ -548,7 +548,7 @@ Los procesos se asignan a una cola dependiendo de alguna propiedad del proceso
 <h3 id="diagramas-de-gantt">Diagramas de GANTT</h3>
 <p>Son usados para mostrar el estado de cada uno de los procesos existentes durante
 un periodo de tiempo determinado.</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/scheduling/gantt.png" alt="Gantt"></p>
+<p><img src="img/scheduling/gantt.png" alt="Gantt"></p>
 <h3 id="métricas-de-rendimiento">Métricas de rendimiento</h3>
 <p>No siempre son compatibles entre ellas</p>
 <ul>
@@ -571,7 +571,7 @@ unidad de tiempo.</li>
 <h3 id="deadlock">Deadlock</h3>
 <p>Se da cuando el sistema se traba, porque todos los procesos están esperando
 recursos que el resto no libera por a su vez estar esperando recursos.</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/deadlock.png" alt="Deadlock"></p>
+<p><img src="img/sync/deadlock.png" alt="Deadlock"></p>
 <h3 id="primitivas-de-sync">Primitivas de sync</h3>
 <h4 id="tas">TAS</h4>
 <p>El hardware provee una instrucción que permite establecer atómicamente el valor
@@ -668,7 +668,7 @@ busy waiting.</p>
 <li>Lee la memoria cache mientras sea verdadero</li>
 <li>Cuando un proceso hace <code>unlock()</code> hay cache miss</li>
 </ul>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/ttas-tas-comparison.png" alt="TTASLock vs TASLock"></p>
+<p><img src="img/sync/ttas-tas-comparison.png" alt="TTASLock vs TASLock"></p>
 <h4 id="cas">CAS</h4>
 <p>Otra primitiva es <em>Compare And Swap</em> o <strong>CAS</strong></p>
 <pre><code class="language-cpp"><div><span class="hljs-function">atomic T <span class="hljs-title">compareAndSwap</span><span class="hljs-params">(T u, T v)</span> </span>{
@@ -719,8 +719,8 @@ para siempre&quot;</li>
 </li>
 </ul>
 <h4 id="modelo-de-proceso">Modelo de proceso</h4>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/modelo-proceso.png" alt="Modelo de proceso"></p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/logica-definiciones.png" alt="Definiciones"></p>
+<p><img src="img/sync/modelo-proceso.png" alt="Modelo de proceso"></p>
+<p><img src="img/sync/logica-definiciones.png" alt="Definiciones"></p>
 <h4 id="ltl">LTL</h4>
 <pre><code class="language-text"><code><div>T |= F?             los estados t satisfacen F
 
@@ -745,7 +745,7 @@ logra, cada vez que lo intenta.</p>
 <p>Para todo proceso, si está en un estado TRY, habrá un momento posterior en el
 que estará en CRIT.</p>
 <p>Intuicion: Libre de procesos que esperan para siempre.</p>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/sync/prop-wait-freedom.png" alt="WAIT FREEDOM"></p>
+<p><img src="img/sync/prop-wait-freedom.png" alt="WAIT FREEDOM"></p>
 <h4 id="fairness---equanimidad">FAIRNESS - Equanimidad</h4>
 <p>Para toda ejecucion <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span></span></span></span> y todo proceso <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.65952em;vertical-align:0em;"></span><span class="mord mathdefault">i</span></span></span></span>, <strong>si</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.65952em;vertical-align:0em;"></span><span class="mord mathdefault">i</span></span></span></span> <em>puede</em> hacer una
 transicion <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>l</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">l_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:-0.01968em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> en una cantidad infinita de estados <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.1132em;">τ</span></span></span></span> <strong>entonces</strong>
@@ -844,7 +844,7 @@ figuran el tamaño y sus limites.</p>
 <p>Asignar y liberar es O(1), pero como decido donde?</p>
 </li>
 </ul>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/bitmap-and-linked-list.png" alt="Comparison"></p>
+<p><img src="img/memory/bitmap-and-linked-list.png" alt="Comparison"></p>
 <p>Para agruparla, se puede optar por bloques de tamaño fijo o variable. Y hay
 distintos mecanismos para poder lograrlo,</p>
 <ul>
@@ -903,7 +903,7 @@ volver a ser usada en lo inmediato.</p>
 </li>
 </ul>
 <h4 id="ejemplo-de-remoción">Ejemplo de remoción</h4>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/ejemplo-remocion.png" alt="Ejemplo algoritmos de remocion"></p>
+<p><img src="img/memory/ejemplo-remocion.png" alt="Ejemplo algoritmos de remocion"></p>
 <h3 id="algoritmos-de-elección-de-bloques-libres">Algoritmos de elección de bloques libres</h3>
 <p>En una lista de bloques</p>
 <ul>
@@ -931,13 +931,13 @@ estructura de datos a parte.</p>
 <p>Todos fallan por ser muy simples.</p>
 <h4 id="ejemplo-de-elección-de-bloques">Ejemplo de elección de bloques</h4>
 <h5 id="first-fit">First Fit</h5>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/asignacion-first-fit.png" alt="First Fit"></p>
+<p><img src="img/memory/asignacion-first-fit.png" alt="First Fit"></p>
 <h5 id="best-fit">Best Fit</h5>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/asignacion-best-fit.png" alt="Best Fit"></p>
+<p><img src="img/memory/asignacion-best-fit.png" alt="Best Fit"></p>
 <h5 id="worst-fit">Worst Fit</h5>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/asignacion-worst-fit.png" alt="Worst Fit"></p>
+<p><img src="img/memory/asignacion-worst-fit.png" alt="Worst Fit"></p>
 <h5 id="resultados">Resultados</h5>
-<p><img src="file:////home/mnpanic/repos/so/resumenes/1p/img/memory/asignacion-resultados.png" alt="Resultados"></p>
+<p><img src="img/memory/asignacion-resultados.png" alt="Resultados"></p>
 <h3 id="page-faults-pf">Page Faults (#PF)</h3>
 <ol>
 <li>Un proceso accede a una dirección virtual de memoria.</li>

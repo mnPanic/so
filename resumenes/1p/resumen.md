@@ -544,7 +544,8 @@ No siempre son compatibles entre ellas
 - *Throughput*: Rendimiento del sistema. Cantidad de procesos que terminan por
   unidad de tiempo.
 - *Turnaround*: Tiempo total que le toma a un proceso ejecutar completamente.
-- *Waiting time*: Tiempo que un proceso pasa en estado *ready*.
+- *Waiting time*: Tiempo que un proceso pasa en estado *ready*. Hay que tener
+  cuidado de no contar el tiempo que pase *blocked*
 
 
 ## Sincronizacion entre procesos
