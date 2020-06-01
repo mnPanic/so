@@ -927,10 +927,10 @@ Se accede mediante direcciones lógicas
 - Page frame
 - Bit de present
 - Bits de protección
-- Bit de *dirty* que indica si una pagina fue modificada desde que se cargó a
-  disco. Solo páginas *dirty* deben ser escritas en disco al desalojarlas.
+- Bit de *dirty* que indica si una pagina fue modificada desde que se cargó de 
+  disco a memoria. Solo páginas *dirty* deben ser escritas en disco al desalojarlas.
 - Bit de *referenciada* que indica si una página fue accedida desde que se cargó
-  de disco. Se usa para decidir que página bajar a disco.
+  de disco a memoria. Se usa para decidir que página bajar a disco.
 
 ##### TLB
 
