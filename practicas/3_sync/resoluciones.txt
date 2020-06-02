@@ -1,0 +1,430 @@
+parte 1 - sync entre procesos
+
+1.
+a. no
+b. 
+
+ya que x = x + 1 es
+
+    1| temp = x
+    2| temp++
+    3| x = temp
+
+podria pasar que se haga temp++ en ambas despues de que lean x, entonces el
+valor no seria 2.
+
+- 0 no puede ser nunca, ya que al menos una incrementa
+- 1 si pasa lo de arriba
+- 2 caso normal
+
+3.
+
+una race condition es cuando el resultado de una ejecucion difiere de uno de los
+posibles resultados de si se hubisen corrido de forma secuencial.
+
+No podran diferir ya que hay exclusion mutua de esa seccion.
+
+4.
+
+wait freedom = si un proceso esta en try, en algun momento posterior esta en
+crit
+fairness = es fair
+excl = no puede haber mas de un proceso en crit
+
+- excl no se veria afectada ya que no levantaria a mas de un proceso a la vez
+- fairness se podria ver afectada, ya que podria haber procesos que no corran
+nunca, si no paran de llegar nuevos procesos que soliciten el semaforo. Pero
+depende de como sean despachados.
+- wait freedom seguiria bien, pero el problema seria que nunca llegue a ejecutar
+ese momento posterior.
+
+5.
+
+si wait() y signal() no son atomicos, entonces se podria entrelazar con otro
+
+signal(sem):
+    sem++
+    despertar a alguno
+
+wait(sem):
+    
+    if sem < 0
+        block
+
+si se usa como mutex,
+
+wait(sem)
+    # CRIT
+signal(sem)
+
+como podria violar esto EXCL? que haya mas de un proceso
+
+Hacen dos procesos wait a la vez, se entrelaza la resta y queda en -1 en vez de
+-2. luego el proceso que estaba en CRIT hace signal antes de que bloqueen,
+entonces ambos van a ver el semaforo en 0, con lo que ninguno de los dos bloquea
+y entran los dos a CRIT.
+
+6.
+
+porque barrera.signal() solo despierta a un proceso de todos los que estan
+esperando. funcionaria de pedo solo en el caso en que los n procesos se quedan
+en el if, y despues de que sumen todos resumen la ejecucion. En ese caso, se
+harian n signals, entonces ninguno bloquearia en el wait, y entrarian bien a la
+seccion critica.
+
+Para solucionarlo basta con hacer un signal luego del wait, patron conocido como
+turnstile.
+
+barrera.wait()
+barrera.signal()
+
+van pasando de a 1 por el turnstile
+
+---
+
+parte 2 - primitivas de sync
+
+7.
+
+es mas eficiente porque no hace uso de un mutex para incrementar el contador,
+sino que se hace de forma atomica con ayuda del hw, lo cual lo hace mas
+eficiente tambien, ya que hay menos context switch.
+
+8. TryToLock intenta tomar un lock al estilo CAS pero retorna el control si no
+lo puede lograr, en lugar de quedarse haciendo busy waiting.
+
+TryToLock(atomic<bool> mtx) bool:
+    return !mtx.testAndSet()
+    # si lockeo, mtx.TestAndSet devuelve false, entonces la fn devuelve true
+
+9.
+
+que se corran de i a N y de 0 a i - 1
+
+esto se puede lograr con N semaforos
+supongo que cada proceso sabe su indice, i
+
+semaphores = []
+for j in 1 .. n:
+    start = 0
+    if j == i:
+        # el proceso i-esimo no bloquea
+        start = 1 
+    semaphores.append(sem(start))
+
+y el codigo de todos los procesos seria el mismo
+
+P(k):
+    # donde k es el nro de proceso
+    semaphores[k].wait() # el i-esimo pasa de largo
+    semaphores[(k+1)%n].signal()
+
+corre el i, que le da signal a i+1, y asi hasta N-1 que le da signal a 0, que
+luego le da signal a 1, y asi.
+
+10.
+
+LOCK-FREEDOM: si no hay ningun proceso en crit y hay uno en try, en algun
+momento alguno esta en crit.
+
+1. A B y C
+
+a_finished = sem(0)
+b_finished = sem(0)
+c_finished = sem(1)
+
+A
+c_finished.wait()
+# A
+a_finished.signal()
+
+B
+a_finished.wait()
+# B
+b_finished.signal()
+
+C
+b_finished.wait()
+# C
+c_finished.signal()
+
+argumentacion de lock freedom
+supongo que no vale.
+entonces no hay ningun proceso en crit y hay uno en try, pero nunca entra
+ninguno a crit.
+
+si no hay ningun proceso en crit, entonces estan los 3 esperando en el primer
+semaforo. Estan los tres en TRY.
+
+Si es la primera iteracion, entonces A entraria a crit porque c_finished es 1
+abs!
+
+p -> q = (no p) o q
+
+no (p -> q) = no ((no p) o q)
+            = p y (no q)
+2. BBCA, BBCA, BBCA
+
+    a_finished = sem(1)
+    b_finished = sem(0)
+    c_finished = sem(0)
+    int b_count = 0;
+
+    A
+    c_finished.wait()
+    # A
+    a_finished.signal()
+
+    B
+    if count % 2 == 0:
+        # en la primera espera que termine A
+        a_finished.wait()
+
+    # B
+    if count %2 != 0:
+        # en la primera no hago signal para que c espere a que corra devuelta
+        b_finished.signal()
+
+    count++
+
+    C
+    b_finished.wait()
+    # C
+    c_finished.signal()
+
+
+3. A es productor, B y C consumidores
+
+Supongo que A se puede bloquear hasta que consuman su informacion
+
+    consumed = Semaphore(0)
+    produced = Semaphore(0)
+    mutex = Semaphore(1)
+
+    ## A
+    # produce
+    # es el unico en CRIT porque el resto esta esperando a produced
+    # produce()
+
+    # signal twice for two processes to consume the data
+    produced.signal()
+    produced.signal()
+
+    # wait twice to assure that both processes consumed
+    consumed.wait()
+    consumed.wait()
+
+    ## B
+    produced.wait()
+    mutex.wait()
+        # consume()
+    mutex.signal()
+    consumed.signal()
+
+    ## C
+    produced.wait()
+    mutex.wait()
+        # consume()
+    mutex.signal()
+    consumed.signal()
+
+argumentacion de LOCK-FREEDOM: Si hay uno en try y no hay ningun en crit,
+entonces en algun momento en el futuro hay alguno en crit.
+
+    Para B y C
+
+    el mutex seguro cumple lock freedom porque aquel que lo toma no se queda
+    esperando por nada mas, solamente hace consume() que suponemos que termina.
+
+    Entonces podria venir por lo de produced.wait(), pero A siempre hace
+    produced.signal() entonces no deberia haber problema.
+
+4. A productor, B y C consumidores. B retira dos veces y retiran en forma
+   alternada
+
+   ABB, AC, ABB, AC, ABB, AC
+
+produce A
+o bien retira B dos veces, o retira C una vez. Retiran uno y uno
+
+A
+# produce()
+produced.signal()
+consumed.wait()
+
+B
+produced.wait()
+
+consumed.signal()
+
+C
+produced.wait()
+
+consumed.signal()
+
+11.
+
+seria como un barrier partido, el primer signal lo hacen los a_i, pero los wait
+y el turnstile lo hacen los b_i
+
+------- parte 3 - deadlock ------
+
+12.
+
+    p1
+        lock(r)
+        sleep forever;
+
+    p2
+        lock(r)
+
+lo agarre quien lo agarre, nunca hacen el unlock, entonces el otro se va a
+quedar esperando para siempre, pero p2 terminaria. no lo consideraria como
+deadlock.
+
+    void f() {
+        lock(r)
+        f()
+        release(r)
+    }
+
+    proceso p3 {
+        f()
+    }
+
+ahora si seria deadlock, porque p3 se quedaria esperando a que alguno libere,
+pero el si lo libera. Si corre p3 primero no habria problema.
+
+13. condiciones de coffman
+
+    1. supongo que el recurso compartido es el lock
+    2. 
+
+15.
+
+4 recursos compartidos por 3 procesos, cada uno necesita a lo sumo 2.
+
+    DEADLOCK-FREEDOM: si todos salen todos entran
+
+Supongo que "procesa por una cantidad de tiempo y termina" incluye que libera
+los recursos que habia tomado.
+
+Lo que podria causar un deadlock es que usen solo 3 recursos, y se de un patron
+similar al de los filosofos que cenan.
+
+    R1 por A busca R2
+    R2 por B busca R3
+    R3 por C busca R1
+
+situacion en la cual se daria un deadlock.
+
+Suponiendo que no se dan esos patrones, y que de cierta forma no agarran los
+mismos recursos, ya que son del mismo tipo, por ejemplo usando algo asi como
+TryToLock en vez de lockear de una, entonces todos podrian entrar.
+
+Y todos salen
+
+---- parte 4 - demos de problemas clasicos ----
+
+18. barbero recargado
+
+y defino el tipo atomic<queue> como un wrapper de un queue que use un mutex para
+garantizar la atomicidad de sus operaciones, push, pop y top.
+
+    capacidad = 20
+    cant = 0
+    cant_mutex = mutex()
+    parados = atomic<queue>(?)
+    sofa = atomic<queue>(?)
+
+    clientes = [Semaphore(0)] * capacidad
+
+    caja_registradora = Sem(0)
+
+
+    ## Cliente
+    cant_mutex.lock()
+        if cant == capacidad:
+            irse()
+        
+        cant++
+    cant_mutex.unlock()
+
+    entrar()
+
+    sem = semaphore(0)
+    parados.push(&sem)
+    # espero en mi semaforo a mi turno para sentarme
+    sem.wait()
+
+    # me dijeron que me siente en el sofa
+    sofa.push(&sem)
+
+    # espero a que me atiendan
+    sem.wait()
+
+    # me atendieron, le digo al proximo que se siente
+    queue.top().signal()
+    
+
+
+    cant_mutex.lock()
+        cant--
+    cant_mutex.unlock()
+
+    ## Barbero
+    cortarCabello()
+
+    aceptarPago()
+
+19.
+
+    machos = Semaphore(0)
+    hembras = Semaphore(0)
+
+    P(i, sexo):
+        if sexo == "m":
+            machos.signal()
+            hembras.wait()
+        elif sexo == "h":
+            hembras.signal()
+            machos.wait()
+        
+        # entran en pareja
+
+20. dining savages
+
+sin sync
+
+    Savage():
+        while (true) {
+            tomar_porcion();
+            comer();
+        }
+
+con sync
+
+    int porciones = M
+    mutex = mutex()
+
+    cook = Sem(0)
+    filled = Sem(0)
+
+    Savage():
+       mutex.lock()
+            if porciones == 0:
+               cook.signal()
+               filled.wait()
+            porciones--
+        mutex.unlock()
+        tomar_porcion() # podria estar dentro del mutex
+        comer()
+
+    Cook():
+        # espera a que alguien lo despierte
+        cook.wait()
+        rellenar()
+        # no hace falta que lockee el mutex pues estan todos trabados en S1
+        # a parte, lockear resultaria en un deadlock.
+        porciones = M
+        filled.signal()

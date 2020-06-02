@@ -1,0 +1,68 @@
+parte 1 - politicas clásicas de scheduling
+
+1.                          duracion (b)
+0 a 2 cpu burst             2
+3 a 10 io burst             8
+11 a 13 cpu                 3
+14 a 20 io burst            7
+21 y 22 cpu                 2
+
+se podria decir que es un proceso de io
+
+2.
+
+3. a uno sin desalojo (non preemptive) porque de running no pasa a ready
+
+4. 
+
+a. round robin no debería causar starvation, ya que justamente todos tienen la
+   misma cantidad de tiempo para ejecutar.
+
+b. por prioridad podria causar starvation de los de prioridad baja si no dejan
+   de llegar procesos de prioridad mas alta
+
+c. sjf los de trabajos largos podrian no correr nunca
+
+d. FIFO: es una cola, y todos se agregan al final, entonces no deberia haber
+   inanición a causa del scheduler, pero si si un proceso se toma tiempo
+   infinito para terminar.
+
+5.
+
+a. seria una forma de modelar prioridades, pero tendrias muchos context switch
+   al pedo probablemente?
+
+b. ventaja y desventaja que no todos los procesos son iguales, entonces se puede
+   ejecutar mas de una vez un proceso antes de que corran los demas.
+
+c. tener un quantum diferente por proceso, si se tenía un proceso con quantum Q
+   que corria N veces, entonces que el nuevo quamtum pase a ser Q' = Q * K
+
+6. -
+
+7. 
+
+a.
+waiting time = ciclos que estuvo ready
+turnaround = tiempo total que tarda en ejecutar
+                0    1    2
+waiting time = (16 + 21 + 3) / 3 = 13,3
+turnaround = (32 + 34 + 6) / 3 = 24
+
+b. tiene que ser con desalojo porque uno paso de running a ready, el quantum
+   varia, asi que no puede ser fijo. Tiene que ser por prioridades ya que en un
+   momento dado el proceso 0 habia llegado primero, pero decidio correr al 2.
+
+--
+
+parte 2 - otras politicas de scheduling
+
+12. porque los intensivos de E/S usan poco CPU y están siempre en blocked.
+    luego no podria haber starvation de los intensivos de CPU, ya que solo se
+    tendrian en cuenta los procesos en ready.
+
+13. yo creo que si, ya que seria como un fifo que cambia de proceso cuando uno
+se bloquea. se verian desfavorecidos los procesos intensivos en E/S, ya que
+siempre irian al final de la cola.
+
+14. 
