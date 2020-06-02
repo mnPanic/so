@@ -74,6 +74,7 @@
         - [Worst Fit](#worst-fit)
         - [Resultados](#resultados)
     - [Page Faults (#PF)](#page-faults-pf)
+    - [Thrashing](#thrashing)
 
 ## SOs
 
@@ -1022,3 +1023,11 @@ Todos fallan por ser muy simples.
 6. Si la pagina que se va a desalojar fue modificada, entonces se baja a disco.
 7. Se carga en el lugar liberado la página solicitada
 8. Se reanuda la ejecución del proceso.
+
+### Thrashing
+
+Se dice que el sistema hace *thrashing* cuando no alcanza la memoria y hay mucha
+competencia entre los discos para usarla. El SO se pasa cambiando con el swap.
+
+Es indeseable ya que la mayor parte del tiempo se pasa haciendo "mantenimiento"
+en lugar de trabajo productivo.
