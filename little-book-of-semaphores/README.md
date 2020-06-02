@@ -45,6 +45,11 @@ Notas de [*The little book of semaphores*][book]
       - [Dining philosophers solution #1](#dining-philosophers-solution-1)
       - [Solucion asimetrica](#solucion-asimetrica)
       - [Solución de Tanenbaum](#solución-de-tanenbaum)
+    - [Cigarette smokers problem](#cigarette-smokers-problem)
+  - [Less classical synchronization problems](#less-classical-synchronization-problems)
+    - [The dining savages problem](#the-dining-savages-problem)
+    - [The barbershop problem](#the-barbershop-problem)
+      - [FIFO Barbershop](#fifo-barbershop)
 
 ## Intro
 
@@ -814,3 +819,194 @@ Hay dos formas por las cuales un filósofo podría comenzar a comer
 - Uno de sus vecinos esta comiendo y el filosofo bloquea su propio semaforo.
   Eventualmente, uno de los vecinos terminara, punto en el cual ejecuta test en
   sus dos vecinos.
+
+### Cigarette smokers problem
+
+Libro p.101
+
+## Less classical synchronization problems
+
+### The dining savages problem
+
+Una tribu de *savages* tiene comidas comunales en las que comen de un pote que
+tiene hasta M servings. Cuando un savage quiere comer, se sirve del pote, pero
+si esta vacio le dice al cocinero que lo llene, y espera a que lo haga.
+
+Código sin sync
+
+```python
+Savage():
+    while True:
+        getServingFromPot()
+        eat()
+
+Cook():
+    while True:
+        putServingsInPot(M)
+```
+
+Los contraints son:
+
+- Los *savages* no pueden llamar a `getServingFromPot` si esta vacio
+- El *cook* puede llamar a `putServingsInPot` solo si esta vacio.
+
+Solucion:
+
+```python
+servings = 0
+mutex = Semaphore(1)
+emptyPot = Semaphore(0)
+fullPot = Semaphore(0)
+
+Savage():
+    while True:
+        mutex.wait()
+            if servings == 0:
+                emptyPot.signal()
+                fullPot.wait()
+
+            servings -= 1
+            getServingFromPot()
+        mutex.signal()
+
+        eat()
+
+Cook():
+    while True:
+        emptyPot.wait()
+        putServingsInPot(M)
+        # Esto podria estar tambien dentro del savage para que siempre se acceda
+        # dentro del mutex, pero no es necesario, ya que en este momento es el
+        # unico accediendo
+        servings = M
+        fullPot.signal()
+```
+
+### The barbershop problem
+
+Originalmente Dijkstra, y una variacion aparece en el Silbershatz (*Operating*
+*Systems Concepts*)
+
+Una barberia consiste de una sala de espera con *n* sillas, y una sola silla
+para cortarse el pelo. Si no hay clientes, el barbero se va a dormir.
+Si entra un cliente y todas las sillas estan ocupadas, se va. Si el barbero esta
+ocupado, pero hay sillas disponibles, se sienta y espera. Si el barbero esta
+dormido, lo despierta.
+
+Y para hacerlo mas concreto,
+
+- Los clientes deberian llamar `getHairCut`
+- Si un cliente llega y el local esta lleno, se van llamando a `balk` que no
+  retorna.
+- El barbero deberia llamar `cutHair`
+- Cuando el barbero llama `cutHair`, deberia haber exactamente un thread
+  llamando a `getHairCut` concurrentemente.
+
+```python
+n = 4
+clients = 0
+mutex = Semaphore(1)
+
+# sync a la entrada
+client = Semaphore(0)
+barber = Semaphore(0)
+
+# sync a la salida
+clientDone = Semaphore(0)
+barberDone = Semaphore(0)
+
+Barber():
+    while True:
+        # espera a que haya un cliente
+        client.wait()
+        # le indica al cliente que esta listo
+        barber.signal()
+
+        # corta pelo
+        cutHair()
+
+        # rendezvous
+        barberDone.signal()
+        clientDone.wait()
+
+
+Client():
+    mutex.wait()    # mutex.lock()
+        if clients == n:
+            mutex.signal()
+            balk()
+
+        clients++
+    mutex.signal()  # mutex.unlock()
+
+    # sin garantizar orden
+    client.signal()
+    barber.wait()
+
+    getHairCut()
+
+    clientDone.signal()
+    barberDone.wait()
+
+    mutex.wait()
+        clients--
+    mutex.signal()
+```
+
+#### FIFO Barbershop
+
+No hay garantia en la anterior que se siga FIFO.
+
+```python
+n = 4
+clients = 0
+mutex = Semaphore(1)
+
+# sync a la entrada
+customer = Semaphore(0)
+
+# sync a la salida
+clientDone = Semaphore(0)
+barberDone = Semaphore(0)
+
+Barber():
+    while True:
+        # espera a que haya un cliente
+        customer.wait()
+        # le indica al cliente que esta listo
+        mutex.wait()
+            sem = clients.pop(0)
+        mutex.signal()
+
+        sem.signal()
+
+        # corta pelo
+        cutHair()
+
+        # rendezvous
+        barberDone.signal()
+        clientDone.wait()
+
+Client():
+    self.sem = Semaphore(0)
+    mutex.wait()    # mutex.lock()
+        if clients == n:
+            mutex.signal()
+            balk()
+
+        clients++
+        queue.push(self.sem)
+    mutex.signal()  # mutex.unlock()
+
+    customer.signal()
+    self.sem.wait()
+
+    getHairCut()
+
+    clientDone.signal()
+    barberDone.wait()
+
+    mutex.wait()
+        clients--
+    mutex.signal()
+```
