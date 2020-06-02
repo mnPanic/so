@@ -1,0 +1,37 @@
+1.
+
+    pag     seg
+logica  lineal  fisica
+
+2. fragmentacion interna es el clasico ejemplo de fragmentacion, en el que se
+desperdician pedazos de memoria. En cambio, externa es cuando un proceso pide
+menos memoria de la que realmente necesita.
+
+3. sheets
+4.
+5.
+    paginacion por demanda
+    acceso secuencial a los datos
+
+    uso del CPU: 20%
+    thrashing (swapeando todo el tiempo)
+    uso de disp de E/S: 10%
+
+El uso del CPU es bajo porque se la esta pasando con mantenimiento (thrashing)
+en vez de que los procesos se ejecuten sobre el.
+
+a. probablemente no, porque el trashing debe estar acotado por la velocidad del
+disco y no del CPU, aunque tal vez lo mejore un poquito.
+
+b. Si con disco de paginado se refiere a la memoria, entonces si
+c. EMpeoraria
+d. Mejoraria porque habria menos competencia por la memoria
+e. Eso seguro
+f. Haria que haya menos thrashing
+g. Y eso kes
+h. Probablemente haga que sea peor
+i. Mejoraria
+
+6.
+
+    
