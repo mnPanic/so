@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>SO - 1P - Ejercicios de Sync (4, 5)</title>
+        <style>
+</style>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/katex.min.css" integrity="sha384-yFRtMMDnQtDRO8rLpMIKrtPCD5jdktao2TV19YiZYWMDkUR5GQZR/NOVTdquEx1j" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+        <link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <style>
+.task-list-item { list-style-type: none; } .task-list-item-checkbox { margin-left: -20px; vertical-align: middle; }
+</style>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        
+        <script src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+        
+    </head>
+    <body class="vscode-light">
+        <h1 id="so---1p---ejercicios-de-sync-4-5">SO - 1P - Ejercicios de Sync (4, 5)</h1>
+<h2 id="4">4</h2>
+<p>Recuerdo las deficiones de las propiedades listadas</p>
+<p>Supongo que CRIT es <code>recorrerCamino()</code></p>
+<ul>
+<li>
+<p><em>LOCK-FREEDOM</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo><mi mathvariant="normal">□</mi><mo stretchy="false">(</mo><mi mathvariant="normal">#</mi><mi>T</mi><mi>R</mi><mi>Y</mi><mo>≥</mo><mn>1</mn><mo>∧</mo><mi mathvariant="normal">#</mi><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi><mo>=</mo><mn>0</mn><mo>⇒</mo><mi mathvariant="normal">◊</mi><mi mathvariant="normal">#</mi><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi><mo>&gt;</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\equiv \square ( \#TRY \geq 1 \wedge \#CRIT = 0 \Rightarrow
+\lozenge \#CRIT &gt; 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord amsrm">□</span><span class="mopen">(</span><span class="mord">#</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.22222em;">Y</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∧</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord">#</span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord amsrm">◊</span><span class="mord">#</span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span></p>
+<p>Si hay al menos un proceso intentando de entrar a la seccion critica y no hay
+ninguno en ella, entonces en algun momento del futuro habra algun proceso
+dentro de la seccion critica.</p>
+<p>Hago el caso de <code>VehiculoSubiendo</code> y el otro es análogo.</p>
+<p>Si hay algun <code>VehiculoSubiendo</code> en TRY necesariamente debe ser en la primera
+linea, <code>nadieBajando.wait()</code>. Como no hay ninguno en la seccion critica,
+quiere decir que o bien el resto de los <code>VehiculoSubiendo</code> todavia no entro a
+CRIT, por lo que le deberian haber hecho <code>signal</code> o justo el ultimo
+<code>VehiculoBajando</code> esta a punto de hacer el <code>nadieSubiendo.signal()</code>, por lo
+que tambien deberia pasar.</p>
+<p>En ambos casos, el proceso llega a CRIT.</p>
+</li>
+<li>
+<p>Y usando predicados auxiliares,</p>
+<ul>
+<li><em>Lograr entrar</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mi>N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo><mo>≡</mo><mi>i</mi><mo>∈</mo><mi>T</mi><mi>R</mi><mi>Y</mi><mo>⇒</mo><mi mathvariant="normal">◊</mi><mi>i</mi><mo>∈</mo><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">IN(i) \equiv i \in TRY \Rightarrow \lozenge i \in CRIT</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69862em;vertical-align:-0.0391em;"></span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.22222em;">Y</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.80335em;vertical-align:-0.11111em;"></span><span class="mord amsrm">◊</span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span></span></span></span></li>
+<li><em>Salir</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mi>U</mi><mi>T</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo><mo>≡</mo><mi>i</mi><mo>∈</mo><mi>C</mi><mi>R</mi><mi>I</mi><mi>T</mi><mo>⇒</mo><mi mathvariant="normal">◊</mi><mi>i</mi><mo>∈</mo><mi>R</mi><mi>E</mi><mi>M</mi></mrow><annotation encoding="application/x-tex">OUT(i) \equiv i \in CRIT \Rightarrow \lozenge i \in REM</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.02778em;">O</span><span class="mord mathdefault" style="margin-right:0.10903em;">U</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69862em;vertical-align:-0.0391em;"></span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.07153em;">C</span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.80335em;vertical-align:-0.11111em;"></span><span class="mord amsrm">◊</span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.05764em;">E</span><span class="mord mathdefault" style="margin-right:0.10903em;">M</span></span></span></span></li>
+<li><em>STARVATION-FREEDOM</em> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≡</mo><mi mathvariant="normal">∀</mi><mi>i</mi><mi mathvariant="normal">□</mi><mi>O</mi><mi>U</mi><mi>T</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo><mo>⇒</mo><mi mathvariant="normal">∀</mi><mi>i</mi><mi mathvariant="normal">□</mi><mi>I</mi><mi>N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\equiv \forall i \square OUT(i) \Rightarrow \forall i
+\square IN(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.46375em;vertical-align:0em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∀</span><span class="mord mathdefault">i</span><span class="mord amsrm">□</span><span class="mord mathdefault" style="margin-right:0.02778em;">O</span><span class="mord mathdefault" style="margin-right:0.10903em;">U</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∀</span><span class="mord mathdefault">i</span><span class="mord amsrm">□</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mopen">(</span><span class="mord mathdefault">i</span><span class="mclose">)</span></span></span></span></li>
+</ul>
+<p><em>Intuitivamente, si todos salen, todos entran.</em></p>
+<p>Tomando como CRIT a <code>recorrerCamino</code>,</p>
+<p>Esto se cumple, ya que si todos salen de la seccion critica, en particular
+tambien sale el que hace que <code>cantSubiendo.getAndDec()</code> sea 0, con lo que se
+liberaria el turnstile de los que van en la direccion opuesta, por el cual
+pasarian todos.</p>
+</li>
+<li>
+<p><code>CRASH-FREEDOM</code> <strong>no</strong> se cumple</p>
+<p><code>nadieBajando</code> y <code>nadieSubiendo</code> comienzan en 1, entonces cualquier proceso
+que le haga <code>wait</code> pasa de largo a la primera, a menos que alguien lo blockee
+con un <code>wait</code>.</p>
+<p>Podria suceder entonces que un <code>VehiculoSubiendo</code> entre, haga <code>wait</code> en
+<code>nadieBajando</code>, pase de largo porque arrancaba en 1, y justo antes del if lo
+desaloje el scheduler.</p>
+<p>En este punto, entra un <code>VehiculoBajando</code>, analogamente pasa de largo por
+<code>nadieSubiendo</code> y a partir de aqui ambos procesos continuan en cualquier
+orden, entrando a la vez a CRIT y rompiendo <code>CRASH-FREEDOM</code>.</p>
+<p>Cuando le hagan wait a <code>nadieSubiendo</code> y <code>nadieBajando</code>, el semaforo va a
+quedar en 0, pero alguien ya paso por ahi, entonces ambos haran
+<code>recorrerCamino</code> a la vez.</p>
+</li>
+</ul>
+<h2 id="5">5</h2>
+<p>Es necesario garantizar la propiedad que no se cumple, <code>CRASH-FREEDOM</code>.</p>
+<p>El problema surge de que puede ser que se bloquee el turnstile despues de que
+haya pasado alguien.</p>
+<p>En principio la idea seria mover el bloqueo arriba del wait. Pero si se hace sin
+mas, podria entrar uno de cada direccion a la vez, hacer los dos wait en
+<code>nadieSubiendo</code> y <code>nadieBajando</code>, asi bloqueandose mutuamente y causando un
+deadlock.</p>
+<p>Para evitar esto, agrego un mutex.</p>
+<p>Es importante notar que cuando el primer <code>VehiculoSubiendo</code> haga
+<code>nadieSubiendo.wait()</code> con el lock tomado, nunca pueden bloquearse. Esto es
+porque el valor de ese semaforo es siempre 1, excepto cuando este proceso le
+hace <code>wait</code>. Analogamente, sucede lo mismo con <code>VehiculoBajando</code></p>
+<p>Ademas, cuando hagan <code>nadieBajando.wait()</code>, si se quedan bloqueados, es porque
+ya hay vehiculos bajando, y eventualmente se liberara, no se dara un deadlock
+porque al bajar no es necesario tomar el lock.</p>
+<pre><code class="language-c"><div><span class="hljs-comment">// Variables compartidas</span>
+atomic&lt;<span class="hljs-keyword">int</span>&gt; cantSubiendo = <span class="hljs-number">0</span>;
+atomic&lt;<span class="hljs-keyword">int</span>&gt; cantBajando = <span class="hljs-number">0</span>;
+Mutex mutex;    <span class="hljs-comment">// podria ser Semaforo(1)</span>
+<span class="hljs-function">Semaforo <span class="hljs-title">nadieBajando</span><span class="hljs-params">(<span class="hljs-number">1</span>)</span></span>;
+<span class="hljs-function">Semaforo <span class="hljs-title">nadieSubiendo</span><span class="hljs-params">(<span class="hljs-number">1</span>)</span></span>;
+
+VehículoSubiendo {
+    mutex.lock()
+        <span class="hljs-keyword">if</span> (cantSubiendo.addAndGet(<span class="hljs-number">1</span>) == <span class="hljs-number">1</span>) {
+            <span class="hljs-comment">// No había nadie subiendo por el camino</span>
+            <span class="hljs-comment">// Bloqueo el turnstile para que nadie pueda bajar</span>
+            nadieSubiendo.wait();
+        }
+
+        <span class="hljs-comment">// Si habia alguien bajando, no estaran con este mutex tomado.</span>
+        nadieBajando.wait();
+    mutex.unlock()
+
+    <span class="hljs-comment">// Hago pasar al resto</span>
+    nadieBajando.signal();
+
+    recorrerCamino();
+
+    <span class="hljs-keyword">if</span> (cantSubiendo.decAndGet(<span class="hljs-number">1</span>) == <span class="hljs-number">0</span>) {
+        <span class="hljs-comment">// Ya no queda nadie subiendo</span>
+        <span class="hljs-comment">// Libero el turnstile para que otros puedan bajar</span>
+        nadieSubiendo.signal();
+    }
+}
+
+<span class="hljs-comment">// Es simetrica pero la agrego por completitud</span>
+VehículoBajando {
+    mutex.lock()
+        <span class="hljs-keyword">if</span> (cantBajando.addAndGet(<span class="hljs-number">1</span>) == <span class="hljs-number">1</span>) {
+            <span class="hljs-comment">// No había nadie bajando por el camino</span>
+            <span class="hljs-comment">// Bloqueo el turnstile para que nadie pueda subir</span>
+            nadieBajando.wait();
+        }
+
+        <span class="hljs-comment">// Si habia alguien subiendo, no estaran con este mutex tomado.</span>
+        nadieSubiendo.wait();
+    mutex.unlock()
+
+    <span class="hljs-comment">// Hago pasar al resto</span>
+    nadieSubiendo.signal();
+
+    recorrerCamino();
+
+    <span class="hljs-keyword">if</span> (cantBajando.decAndGet(<span class="hljs-number">1</span>) == <span class="hljs-number">0</span>) {
+        <span class="hljs-comment">// Ya no queda nadie bajando</span>
+        <span class="hljs-comment">// Libero el turnstile para que otros puedan subir</span>
+        nadieBajando.signal();
+    }
+}
+</div></code></pre>
+<p>Se debe cumplir <code>CRASH-FREEDOM</code>, pues no puede suceder que un proceso pase
+cuando el otro le quiso bloquear el turnstile, ya que el acto de pasar por el
+turnstile y el bloqueo del mismo se hacen &quot;dentro&quot; del mutex.</p>
+
+    </body>
+    </html>

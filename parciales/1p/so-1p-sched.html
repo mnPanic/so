@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>SO - 1P - Ejercicio de Scheduling (3)</title>
+        <style>
+</style>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.10.2/dist/katex.min.css" integrity="sha384-yFRtMMDnQtDRO8rLpMIKrtPCD5jdktao2TV19YiZYWMDkUR5GQZR/NOVTdquEx1j" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+        <link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <style>
+.task-list-item { list-style-type: none; } .task-list-item-checkbox { margin-left: -20px; vertical-align: middle; }
+</style>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        
+        <script src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+        
+    </head>
+    <body class="vscode-light">
+        <h1 id="so---1p---ejercicio-de-scheduling-3">SO - 1P - Ejercicio de Scheduling (3)</h1>
+<blockquote>
+<p>En los casos siguientes se muestran diferentes características o comportamientos de procesos, y su correspodiente diagrama de Gantt cuando se le aplica un scheduler en particular.</p>
+<p>a. Para cada caso indique cuál es el algoritmo del scheduler utilizado.</p>
+<p>b. Calcule el waiting-time promedio para cada uno.</p>
+<p>c. Discuta este resultado waiting-time promedio para los casos A y B. ¿Por qué dan estos resultados?</p>
+</blockquote>
+<p>Recuerdo que <em>waiting time</em> es el tiempo que un proceso pasa en estado <em>ready</em>.
+Es decir, esta listo para ejecutar en la CPU, pero el scheduler todavia no hizo
+su dispatch.</p>
+<h2 id="caso-a">Caso A</h2>
+<p>a.</p>
+<p>Si bien llegaron todos al mismo tiempo, se decidió ejecutar primero a P1 en
+vez de P2 y P3, y luego P2 en vez de P3. Esto me hace creer que es un
+scheduler con algun tipo de prioridad, pero también podría estar tirando un
+random si fuera un scheduler FIFO, como llegaron al mismo tiempo es imposible
+decirlo con certeza.</p>
+<p>Como todos corren ininterrumpidos, me hace creer que es un scheduler
+non-preemptive, es decir, que toma decisiones sobre que hacer con los procesos
+solo cuando se bloquean, y no los desaloja pasados un <em>quantum</em>.
+El problema es que como ninguno se bloqueo, también podría ser que sea un
+scheduler con preemption y un <em>quantum</em> de 14 ciclos de clock, por lo que P1
+correría sin ser desalojado.</p>
+<p>Lo que se me hace mas razonable es asumir que es un scheduler non-preemptive, con prioridades.</p>
+<p>b. avg waiting time = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0</mn><mo>+</mo><mn>14</mn><mo>+</mo><mo stretchy="false">(</mo><mn>14</mn><mo>+</mo><mn>3</mn><mo stretchy="false">)</mo><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mn>3</mn><mo>=</mo><mn>31</mn><mi mathvariant="normal">/</mi><mn>3</mn><mo>≈</mo><mn>10</mn><mo separator="true">,</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">(0 + 14 + (14 + 3)) / 3 = 31 / 3 \approx 10,3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3</span><span class="mclose">)</span><span class="mclose">)</span><span class="mord">/</span><span class="mord">3</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3</span><span class="mord">1</span><span class="mord">/</span><span class="mord">3</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8388800000000001em;vertical-align:-0.19444em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">3</span></span></span></span></p>
+<h2 id="caso-b">Caso B</h2>
+<p>a.</p>
+<p>Como todos llegaron al mismo tiempo, no es posible decirlo con un 100% de
+certeza, pero veo que podria haber mas de un scheduling posible. Por ejemplo,
+podria ser SJF (<em>Shortest Job First</em>) o SRTF (<em>Shortest Remaining Time First</em>)
+ya que ejecuta primero a los que duraran menos.</p>
+<p>Pero tambien podria tranquilamente ser FIFO y que haya tirado un random.</p>
+<p>En cuanto a si es preemtive o non-preemptive, podria ser que tenga un quantum
+de 3 ticks de clock, y que haya decidido no desalojar al proceso P3 ya que no
+hay otro para ejecutar en su lugar. Pero tambien podria ser non-preemtive.</p>
+<p>Lo que me parece mas razonable es que sea SJF, pero hay que tener
+en cuenta que es dificil en un caso real saber cuanto van a tardar en ejecutar
+los procesos.</p>
+<p>b. avg waiting time = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0</mn><mo>+</mo><mn>3</mn><mo>+</mo><mo stretchy="false">(</mo><mn>3</mn><mo>+</mo><mn>3</mn><mo stretchy="false">)</mo><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mn>3</mn><mo>=</mo><mn>9</mn><mi mathvariant="normal">/</mi><mn>3</mn><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">(0 + 3 + (3 + 3)) / 3 = 9 / 3 = 3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3</span><span class="mclose">)</span><span class="mclose">)</span><span class="mord">/</span><span class="mord">3</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">9</span><span class="mord">/</span><span class="mord">3</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">3</span></span></span></span></p>
+<h2 id="caso-c">Caso C</h2>
+<p>Imagen que agrega el estado <em>ready</em> para mayor claridad.</p>
+<p><img src="file:////home/mnpanic/repos/so/parciales/1p/ej3_c.png" alt="3c"></p>
+<p>a.</p>
+<ul>
+<li>Cuando corre P2 podria haber corrido P2, P3 o P4. Esto puede haber sido por
+orden de llegada, o porque P2 tenia el <em>shortest job</em></li>
+<li>No los corre en orden de llegada, pues P4 corre antes que P3, a pesar de haber
+llegado después. Esto descarta que sea round robin / FCFS (FIFO)</li>
+</ul>
+<p>Necesariamente debe ser un scheduler por prioridades, y no puede ser FIFO.</p>
+<p>Seria razonable que esa prioridad este determinada por el largo del trabajo, ya
+que corre P2 y P4 antes que P3. Nuevamente SJF</p>
+<p>b. avg waiting time = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0</mn><mo>+</mo><mn>7</mn><mo>+</mo><mn>15</mn><mo>+</mo><mn>9</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mn>4</mn><mo>=</mo><mn>31</mn><mi mathvariant="normal">/</mi><mn>4</mn><mo>=</mo><mn>7</mn><mo separator="true">,</mo><mn>75</mn></mrow><annotation encoding="application/x-tex">(0 + 7 + 15 + 9) / 4 = 31/4 = 7,75</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">7</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">5</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">9</span><span class="mclose">)</span><span class="mord">/</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3</span><span class="mord">1</span><span class="mord">/</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8388800000000001em;vertical-align:-0.19444em;"></span><span class="mord">7</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">7</span><span class="mord">5</span></span></span></span></p>
+<h2 id="caso-d">Caso D</h2>
+<p>a.</p>
+<p><img src="file:////home/mnpanic/repos/so/parciales/1p/ej3_d.png" alt="3c"></p>
+<p>Voy a suponer que el proceso P1 no se bloquea, sino que luego de ejecutar por un
+ciclo fue desalojado a favor de P2, en el medio quedando en estado ready. Seria
+razonable asumir que este es un scheduler parecido a SJF, pero que desaloja a
+los procesos cuando llega uno con trabajo mas corto que el que esta running.</p>
+<p>Esto explicaría por qué desaloja a P1 cuando llega P2, y no desaloja a P2 cuando
+llegan P3 y P4.</p>
+<p>Devuelta no puede ser Round Robin o FCFS porque al tener la posibilidad de
+ejecutar P3 o P4 ejecuta P4, a pesar de haber llegado despues. Otra razón para
+que sea parecido a SJF.</p>
+<p>Seria aun mas razonable que sea SRTF, ya que los va desalojando, y por ejemplo
+si aun proceso que tiene 100 clocks en total lo desaloja cuando le quedan 4, y
+despues llega uno de 99, querria poner a ejecutar al de 100 ya que le faltan 4,
+a pesar de que su trabajo sea mas largo.</p>
+<p>b. waiting time = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>9</mn><mo>+</mo><mn>0</mn><mo>+</mo><mn>15</mn><mo>+</mo><mn>2</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mn>4</mn><mo>=</mo><mn>26</mn><mi mathvariant="normal">/</mi><mn>4</mn><mo>=</mo><mn>6</mn><mo separator="true">,</mo><mn>5</mn></mrow><annotation encoding="application/x-tex">(9 + 0 + 15 + 2) / 4 = 26 / 4 = 6,5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">9</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">5</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mclose">)</span><span class="mord">/</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord">6</span><span class="mord">/</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8388800000000001em;vertical-align:-0.19444em;"></span><span class="mord">6</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">5</span></span></span></span></p>
+<h2 id="punto-c">Punto C</h2>
+<blockquote>
+<p>c. Discuta este resultado waiting-time promedio para los casos A y B. ¿Por qué dan estos resultados?</p>
+</blockquote>
+<p>Porque al correr los que tienen trabajos mas cortos primero se optimiza mejor el
+tiempo, ya que los procesos no tienen que estar esperando a que el que tarda mas
+termine de ejecutar para poder correr.</p>
+
+    </body>
+    </html>
