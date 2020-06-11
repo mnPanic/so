@@ -49,7 +49,7 @@ void test_azar() {
     assert(dev.is_open());
 
     std::cout << "* Configurando limite en 256" << std::endl;
-    dev << "256\0";
+    dev << "256" << std::endl;
     std::cout << "* Output: ";
     for (unsigned int i = 0; i < 16; i++) {
         dev >> rand;
