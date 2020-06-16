@@ -46,13 +46,13 @@ static ssize_t letras123_open(struct inode* node, struct file* fp) {
 			slots[i].taken = 1;
 			fp->private_data = i;
 			printk(KERN_ALERT "took %d\n", i);
-			break;
+			return 0;
 		}
 		i++;
 	}
 	spin_unlock(&slots_lock);
 
-	return 0;
+	return -EPERM;
 }
 
 static ssize_t letras123_release(struct inode* node, struct file* fp) {
