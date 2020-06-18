@@ -273,20 +273,134 @@ unsigned int Ext2FS::blockaddr2sector(unsigned int block)
 	return pentry.start_lba() + block * sectors_per_block;
 }
 
+#define BLOCK_SIZE(logSize) (1024 << logSize)
+#define INODE_BLOCK_ENTRY_AMOUNT(logSize) (BLOCK_SIZE(logSize) / sizeof(Ext2FSInode))
+#define BLOCK_ENTRY_AMOUNT(logSize) (BLOCK_SIZE(logSize) / sizeof(int))
+
 /**
  * Warning: This method allocates memory that must be freed by the caller
  */
 struct Ext2FSInode * Ext2FS::load_inode(unsigned int inode_number)
 {
-	//TODO: Ejercicio 2
+	unsigned int blockLogSize = superblock()->log_block_size;
+	unsigned int block_group_num = blockgroup_for_inode(inode_number);
+	Ext2FSBlockGroupDescriptor *block_group_descriptor = block_group(block_group_num);
+	
+	unsigned int inode_index = blockgroup_inode_index(inode_number);
 
+	// TODO: Si las cosas no andan, probar clavarle un + 1.
+	int tableOffset = inode_index / INODE_BLOCK_ENTRY_AMOUNT(blockLogSize);
+	int blockOffset = inode_index % INODE_BLOCK_ENTRY_AMOUNT(blockLogSize);
+
+	/*
+		Bloques de 512
+		512 ---- 64
+
+		inode_table = 12
+		12 / 8 --> 1
+		12 % 8 --> 4
+	*/
+
+	int blockAddr = block_group_descriptor->inode_table + tableOffset;
+
+	unsigned char *buff;
+	read_block(blockAddr, buff);
+	
+	Ext2FSInode *blockTable = (Ext2FSInode *) buff;
+
+	// TODO: Si no funciona, hacer un memcpy.
+	Ext2FSInode *inode = (Ext2FSInode *) malloc(sizeof(Ext2FSInode));
+	*inode = blockTable[blockOffset];
+	return inode;
 }
 
-unsigned int Ext2FS::get_block_address(struct Ext2FSInode * inode, unsigned int block_number)
+#define SINGLE_INDIRECTION_BLOCK 12
+#define DOUBLE_INDIRECTION_BLOCK 13
+#define TRIPLE_INDIRECTION_BLOCK 14
+#define SINGLE_INDIRECTION_BLOCK_LIMIT(blockLogSize) (SINGLE_INDIRECTION_BLOCK + BLOCK_ENTRY_AMOUNT(blockLogSize))
+#define DOUBLE_INDIRECTION_BLOCK_LIMIT(blockLogSize) (SINGLE_INDIRECTION_BLOCK_LIMIT(blockLogSize) + BLOCK_ENTRY_AMOUNT(blockLogSize) * BLOCK_ENTRY_AMOUNT(blockLogSize))
+#define TRIPLE_INDIRECTION_BLOCK_LIMIT(blockLogSize) (DOUBLE_INDIRECTION_BLOCK_LIMIT(blockLogSize) + BLOCK_ENTRY_AMOUNT(blockLogSize) * BLOCK_ENTRY_AMOUNT(blockLogSize) * BLOCK_ENTRY_AMOUNT(blockLogSize))
+
+unsigned int Ext2FS::get_block_address(struct Ext2FSInode *inode, unsigned int block_number)
 {
+	unsigned int blockLogSize = superblock()->log_block_size;
+	/*
+		12 --> Directo
+		12 + 128 --> Indirección simple
+		12 + 128^2 --> Indirección doble
+		1 -> 128 entradas
+		2 -> 128^2 entradas
+		3 -> 128^3 entradas
+	*/
 
-	//TODO: Ejercicio 1
+	if (block_number < SINGLE_INDIRECTION_BLOCK) {
+		return inode->block[block_number];
+	} else if (block_number < SINGLE_INDIRECTION_BLOCK_LIMIT(blockLogSize)) {
+		// Indirección simple
+		int offset = block_number - SINGLE_INDIRECTION_BLOCK;
+		return solve_single_indirection(inode->block, SINGLE_INDIRECTION_BLOCK, offset);
+	} else if (block_number < DOUBLE_INDIRECTION_BLOCK_LIMIT(blockLogSize)) {
+		// Indirección doble
+		int offset = block_number - SINGLE_INDIRECTION_BLOCK_LIMIT(blockLogSize);
+		return solve_double_indirection(inode->block, DOUBLE_INDIRECTION_BLOCK, offset);
+	} else if (block_number < TRIPLE_INDIRECTION_BLOCK_LIMIT(blockLogSize)) {
+		// Indirección triple
+		int offset = block_number - DOUBLE_INDIRECTION_BLOCK_LIMIT(blockLogSize);
+		return solve_triple_indirection(inode->block, TRIPLE_INDIRECTION_BLOCK, offset);
+	} else {
+		return 0;
+	}
+}
 
+unsigned int Ext2FS::solve_single_indirection(unsigned int *table, int tableIndex, int offset) {
+	int singleIndirectionBlockAddr = table[tableIndex];
+
+	unsigned char *buff;
+	read_block(singleIndirectionBlockAddr, buff);
+	
+	unsigned int *singleIndirectionTable = (unsigned int *) buff;
+
+	return singleIndirectionTable[offset];
+}
+
+// 37 / 4 * 4 --> 2
+// 37 % 4 * 4 --> 1
+
+// [
+// 	[0;15],
+// 	[16;31],
+// 	[32;47],
+// 	[48;63],
+// ]
+
+unsigned int Ext2FS::solve_double_indirection(unsigned int *table, int tableIndex, int offset) {
+	unsigned int blockLogSize = superblock()->log_block_size;
+	int i = offset / BLOCK_ENTRY_AMOUNT(blockLogSize);
+	int j = offset % BLOCK_ENTRY_AMOUNT(blockLogSize);
+
+	int doubleIndirectionBlockAddr = table[tableIndex];
+
+	unsigned char *buff;
+	read_block(doubleIndirectionBlockAddr, buff);
+	
+	unsigned int *doubleIndirectionTable = (unsigned int *) buff;
+
+	return solve_single_indirection(doubleIndirectionTable, i, j);
+}
+
+unsigned int Ext2FS::solve_triple_indirection(unsigned int *table, int tableIndex, int offset) {
+	unsigned int blockLogSize = superblock()->log_block_size;
+	int i = offset / (BLOCK_ENTRY_AMOUNT(blockLogSize) * BLOCK_ENTRY_AMOUNT(blockLogSize));
+	int j = offset % (BLOCK_ENTRY_AMOUNT(blockLogSize) * BLOCK_ENTRY_AMOUNT(blockLogSize));
+
+	int tripleIndirectionBlockAddr = table[tableIndex];
+
+	unsigned char *buff;
+	read_block(tripleIndirectionBlockAddr, buff);
+	
+	unsigned int *tripleIndirectionTable = (unsigned int *) buff;
+
+	return solve_double_indirection(tripleIndirectionTable, i, j);
 }
 
 void Ext2FS::read_block(unsigned int block_address, unsigned char * buffer)
@@ -295,17 +409,36 @@ void Ext2FS::read_block(unsigned int block_address, unsigned char * buffer)
 	unsigned int sectors_per_block = block_size / SECTOR_SIZE;
 	for(unsigned int i = 0; i < sectors_per_block; i++)
 		_hdd.read(blockaddr2sector(block_address)+i, buffer+i*SECTOR_SIZE);
-	}
+}
+
+#define FILE_SEP "/"
+#define DIR_BLOCK_SIZE(blockSize) (BLOCK_SIZE(blockSize) / sizeof(Ext2FSDirEntry))
 
 struct Ext2FSInode * Ext2FS::get_file_inode_from_dir_inode(struct Ext2FSInode * from, const char * filename)
 {
+	unsigned int blockLogSize = superblock()->log_block_size;
+
 	if(from == NULL)
 		from = load_inode(EXT2_RDIR_INODE_NUMBER);
 	//std::cerr << *from << std::endl;
 	assert(INODE_ISDIR(from));
 
-	//TODO: Ejercicio 3
+	for (int i = 0; true; i++) {
+		int blockAddr = get_block_address(from, 0);
 
+		unsigned char *buff;
+		read_block(blockAddr, buff);
+		
+		Ext2FSDirEntry *dirEntries = (Ext2FSDirEntry *) buff;
+
+		for (int j = 0; j < DIR_BLOCK_SIZE(blockLogSize); j++) {
+			if (dirEntries[j].name == filename) {
+				return load_inode(dirEntries[j].inode);
+			}
+		}
+	}
+	
+	return NULL;
 }
 
 fd_t Ext2FS::get_free_fd()
