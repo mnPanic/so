@@ -173,7 +173,7 @@ struct __attribute__((__packed__)) Ext2FSBlockGroupDescriptor
 	short free_inodes_count;
 	short used_dirs_count;
 	short padding;
-	char reserved[12];	
+	char reserved[12];
 };
 
 struct __attribute__((__packed__)) Ext2FSDirEntry {
@@ -252,6 +252,9 @@ private:
 	void mark_fd_as_used(fd_t fd);
 	void mark_fd_as_free(fd_t fd);
 
+	unsigned int solve_single_indirection(unsigned int *table, int tableIndex, int offset);
+	unsigned int solve_double_indirection(unsigned int *table, int tableIndex, int offset);
+	unsigned int solve_triple_indirection(unsigned int *table, int tableIndex, int offset);
 
 	// fd_t indexed inode array
 	struct Ext2FSInode _open_files[EXT2_MAX_OPEN_FILES];
