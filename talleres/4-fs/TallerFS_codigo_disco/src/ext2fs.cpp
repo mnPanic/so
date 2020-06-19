@@ -332,6 +332,7 @@ unsigned int Ext2FS::get_block_address(struct Ext2FSInode *inode, unsigned int b
 	} else if (block_number < SINGLE_INDIRECTION_BLOCK_LIMIT(blockLogSize)) {
 		// Indirección simple
 		int offset = block_number - SINGLE_INDIRECTION_BLOCK;
+		printf("offset\n");
 		return solve_single_indirection(inode->block, SINGLE_INDIRECTION_BLOCK, offset);
 	} else if (block_number < DOUBLE_INDIRECTION_BLOCK_LIMIT(blockLogSize)) {
 		// Indirección doble
@@ -347,9 +348,11 @@ unsigned int Ext2FS::get_block_address(struct Ext2FSInode *inode, unsigned int b
 }
 
 unsigned int Ext2FS::solve_single_indirection(unsigned int *table, int tableIndex, int offset) {
+	//printf("single indir, tableIndex: %i, offset: %i\n", tableIndex, offset);
 	int singleIndirectionBlockAddr = table[tableIndex];
+	//printf("table ok\n");
 
-	unsigned char *buff;
+	unsigned char buff[BLOCK_SIZE(superblock()->log_block_size)];
 	read_block(singleIndirectionBlockAddr, buff);
 	
 	unsigned int *singleIndirectionTable = (unsigned int *) buff;
@@ -374,7 +377,7 @@ unsigned int Ext2FS::solve_double_indirection(unsigned int *table, int tableInde
 
 	int doubleIndirectionBlockAddr = table[tableIndex];
 
-	unsigned char *buff;
+	unsigned char buff[BLOCK_SIZE(superblock()->log_block_size)];
 	read_block(doubleIndirectionBlockAddr, buff);
 	
 	unsigned int *doubleIndirectionTable = (unsigned int *) buff;
@@ -389,7 +392,7 @@ unsigned int Ext2FS::solve_triple_indirection(unsigned int *table, int tableInde
 
 	int tripleIndirectionBlockAddr = table[tableIndex];
 
-	unsigned char *buff;
+	unsigned char buff[BLOCK_SIZE(superblock()->log_block_size)];
 	read_block(tripleIndirectionBlockAddr, buff);
 	
 	unsigned int *tripleIndirectionTable = (unsigned int *) buff;
@@ -406,7 +409,7 @@ void Ext2FS::read_block(unsigned int block_address, unsigned char * buffer)
 }
 
 #define FILE_SEP "/"
-#define DIR_BLOCK_SIZE(blockSize) (BLOCK_SIZE(blockSize) / sizeof(Ext2FSDirEntry))
+#define DIR_BLOCK_SIZE(blockSize, dir_size) ( / dir_size)
 
 struct Ext2FSInode * Ext2FS::get_file_inode_from_dir_inode(struct Ext2FSInode * from, const char * filename)
 {
@@ -417,19 +420,23 @@ struct Ext2FSInode * Ext2FS::get_file_inode_from_dir_inode(struct Ext2FSInode * 
 	//std::cerr << *from << std::endl;
 	assert(INODE_ISDIR(from));
 
-	for (int i = 0; true; i++) {
-		int blockAddr = get_block_address(from, 0);
-
-		unsigned char *buff;
+	int i = 0;
+	// Recorremos todos los bloques
+	while (true) {
+		int blockAddr = get_block_address(from, i);
+		unsigned char buff[BLOCK_SIZE(blockLogSize)];
 		read_block(blockAddr, buff);
-		
-		Ext2FSDirEntry *dirEntries = (Ext2FSDirEntry *) buff;
 
-		for (int j = 0; j < DIR_BLOCK_SIZE(blockLogSize); j++) {
-			if (dirEntries[j].name == filename) {
+		Ext2FSDirEntry* dirEntries = (Ext2FSDirEntry*) buff;
+
+		// Recorremos los dir entries que estan dentro del bloque i-esimo
+		for (int j = 0; j < (BLOCK_SIZE(blockLogSize) / sizeof(Ext2FSDirEntry)); j++) {	
+			if (strcmp(dirEntries[j].name, filename)) {
 				return load_inode(dirEntries[j].inode);
 			}
 		}
+
+		i++;
 	}
 	
 	return NULL;
