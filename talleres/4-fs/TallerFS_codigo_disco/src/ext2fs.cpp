@@ -274,43 +274,37 @@ unsigned int Ext2FS::blockaddr2sector(unsigned int block)
 }
 
 #define BLOCK_SIZE(logSize) (1024 << logSize)
-#define INODE_BLOCK_ENTRY_AMOUNT(logSize) (BLOCK_SIZE(logSize) / sizeof(Ext2FSInode))
+#define INODE_BLOCK_ENTRY_AMOUNT(logSize, inode_size) (BLOCK_SIZE(logSize) / inode_size)
 #define BLOCK_ENTRY_AMOUNT(logSize) (BLOCK_SIZE(logSize) / sizeof(int))
 
 /**
  * Warning: This method allocates memory that must be freed by the caller
  */
-struct Ext2FSInode * Ext2FS::load_inode(unsigned int inode_number)
-{
+struct Ext2FSInode * Ext2FS::load_inode(unsigned int inode_number) {
+
 	unsigned int blockLogSize = superblock()->log_block_size;
+	unsigned int inode_size = superblock()->inode_size;
+
 	unsigned int block_group_num = blockgroup_for_inode(inode_number);
 	Ext2FSBlockGroupDescriptor *block_group_descriptor = block_group(block_group_num);
-	
+
+	// indice del inodo relativo a la tabla de inodos
 	unsigned int inode_index = blockgroup_inode_index(inode_number);
 
-	// TODO: Si las cosas no andan, probar clavarle un + 1.
-	int tableOffset = inode_index / INODE_BLOCK_ENTRY_AMOUNT(blockLogSize);
-	int blockOffset = inode_index % INODE_BLOCK_ENTRY_AMOUNT(blockLogSize);
+	// tableOffset: offset en bloques de la base de la tabla de inodos
+	unsigned int tableOffset = inode_index / INODE_BLOCK_ENTRY_AMOUNT(blockLogSize, inode_size);
+	unsigned int blockOffset = inode_index % INODE_BLOCK_ENTRY_AMOUNT(blockLogSize, inode_size);
 
-	/*
-		Bloques de 512
-		512 ---- 64
+	// inode table es el numero de bloque absoluto en el que arranca la tabla
+	unsigned int blockAddr = block_group_descriptor->inode_table + tableOffset;
 
-		inode_table = 12
-		12 / 8 --> 1
-		12 % 8 --> 4
-	*/
-
-	int blockAddr = block_group_descriptor->inode_table + tableOffset;
-
-	unsigned char *buff;
+	unsigned char buff[BLOCK_SIZE(blockLogSize)];
 	read_block(blockAddr, buff);
 	
 	Ext2FSInode *blockTable = (Ext2FSInode *) buff;
-
-	// TODO: Si no funciona, hacer un memcpy.
 	Ext2FSInode *inode = (Ext2FSInode *) malloc(sizeof(Ext2FSInode));
 	*inode = blockTable[blockOffset];
+
 	return inode;
 }
 

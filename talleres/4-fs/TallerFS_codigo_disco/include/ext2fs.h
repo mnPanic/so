@@ -168,7 +168,7 @@ struct __attribute__((__packed__)) Ext2FSBlockGroupDescriptor
 {
 	unsigned int block_bitmap;
 	unsigned int inode_bitmap;
-	unsigned int inode_table;
+	unsigned int inode_table;	// base de la tabla de inodos, en bloques abs
 	short free_blocks_count;
 	short free_inodes_count;
 	short used_dirs_count;
