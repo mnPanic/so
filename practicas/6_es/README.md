@@ -1,4 +1,4 @@
-# Practica 6 - Drivers
+# Practica 6 - E/S
 
 Cosas a tener en cuenta para ejs de drivers
 
@@ -190,7 +190,7 @@ LBA suele ser el nombre que se le da al puntero al sector.
 
 Un disco no es una tira, tiene platos, tiene pistas, y cada una tiene sectores
 
-    LBA = (número de pista)*(cantidad_sectores_por_pista) + (número de sector dentro de la pista), si no me equivoco
+    LBA = (número de pista)*(cantidad_sectores_por_pista) + (número de sector dentro de la pista)
 
 ![esquema disco](img/Chs-lba.png)
 
