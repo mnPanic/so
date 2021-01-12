@@ -2,6 +2,7 @@
 
 - [Resumen final SO](#resumen-final-so)
   - [Bibliografia](#bibliografia)
+    - [Silber](#silber)
   - [Temas](#temas)
   - [Intro](#intro)
     - [Elementos básicos](#elementos-básicos)
@@ -19,6 +20,17 @@
 - Modern Operating Systems, Andrew S. Tanenbaum.
 - Sistemas distribuidos: Distributed Algorithms. Nancy A. Lynch. Morgan Kaufmann Publishers Inc., San Francisco, CA, USA. 1996.
 - Synchro: The Art of Multiprocessor Programming
+
+### Silber
+
+- 1 - 2: Overview
+- 3 - 5: Procesos
+- 6 - 8: Sync
+- 9 - 10: Memoria
+- 11 - 12: Storage, IO
+- 13 - 15: FS
+- 16 - 17: Seguridad y proteccion
+- 18 - 19: Advanced topics
 
 ## Temas
 
