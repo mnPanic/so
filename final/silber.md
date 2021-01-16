@@ -1,4 +1,10 @@
-# Notas del silber
+<!-- markdownlint-disable MD025 MD045 -->
+<!-- MD025 single-title/single-h1 - Multiple top level headings in the same document -->
+<!-- MD045/no-alt-text: Images should have alternate text (alt text)markdownlintMD045 -->
+
+# Part one - Overview
+
+Notas del silber
 
 ## Chapter 1 - Introduction
 
@@ -283,7 +289,7 @@ Más info en el libro.
 - BSD Unix
 - Solaris
 
-## 2 - Operating System Structures
+## Chapter 2 - Operating System Structures
 
 Objetivos:
 
@@ -495,3 +501,221 @@ Como hacer debugging en el kernel, [BCC](https://github.com/iovisor/bcc)
   - La mayoria de los SOs modernos son un hybrido entre modular y monolithic.
 
 - Un **boot loader** carga un SO a memoria, lo inicializa y ejecuta.
+
+# Part two - Process Management
+
+- Un *proceso* es un programa en ejecución. Necesita recursos para cumplir su
+  tarea, que se le reservan mientras ejecuta.
+
+- Es la *unidad de trabajo* del sistema. Los sistemas consisten en una colección
+  de procesos, los del SO ejecutan código de sistema y los de usuario código de
+  usuario. Todos concurrentemente.
+
+- Los SOs modernos permiten que tengan diferentes *threads* de control. Cuando
+  hay más de un core, pueden correr en paralelo.
+
+- Un aspeco importante del SO es como hace el *scheduling* de threads a cores.
+
+## Chapter 3 - Processes
+
+Objetivos
+
+- Componentes de un proceso y como se representan y schedulean en un SO
+- Creacion y terminacion de procesos.
+- IPC con shared memory y message passing
+  - Programas con pipes y POSIX shared memory
+- Client-server communication con sockets y RPC
+- Kernel modules que interactuan con el sistema.
+
+### Concepto de proceso
+
+El estado es el PC y el contenido de los registros. La memoria se separa en
+
+- Text section: Codigo ejecutable
+- Data: Variables globales
+- Heap: Memoria dinamica
+- Stack: Almacenamiento temporal (parametros, RET addr, variables locales)
+
+![](img-silver/3-processes/process-layout-memory.png)
+
+Aunque dos procesos tengan asociado el mismo programa, son secuencias de
+ejecucion distintas. Tienen el mismo text y data, pero heap y stack varian.
+
+#### State
+
+Mientras un proceso ejecuta, tiene **estado** (state).
+
+- **new**: Esta siendo creado
+- **running**: Se estan ejecutando instrucciones
+- **waiting**: Esta esperando a que ocurra algun evento (IO / o una signal)
+- **ready**: Esperando para tener asignado un procesador.
+- **terminated**: Termino ejecucion
+
+![](img-silver/3-processes/process-state.png)
+
+#### PCB
+
+Cada proceso se representa en el SO por una **process control block** (PCB), o
+task control block. Incluye
+
+- Estado del proceso
+- PC (addr de la siguiente instruccion a ejecutar)
+- CPU Registers (es necesario guardarla para poder resumir la ejecucion del
+  proceso)
+- CPU-scheduling info. Prioridad, punteros a colas, etc.
+- Memory-management info
+- Accounting info: tiempo usado, etc.
+- IO status: IO devices allocated, open files, etc.
+
+Es toda la data necesaria para comenzar o reiniciar un proceso, ademas de alguna
+accounting data.
+
+Cuando hay **threads** la PCB contiene info de cada uno.
+
+### Process/CPU Scheduling
+
+Un **process scheduler** elige un proceso listo para que ejecute en un core.
+Cada core puede ejecutar uno solo a la vez.
+
+La cantidad de procesos en memoria es conocida como **degree of
+multiprogramming**.
+
+La mayoria de los procesos se pueden dividir en dos
+
+- **IO-bound**: la mayoria del tiempo la pasa haciendo IO mas que computations
+- **CPU-bound**: hace poco IO y mas que nada computations.
+
+El sistema mantiene diferentes colas para los procesos
+
+- Ready queue
+- Wait queue
+
+![](img-silver/3-processes/queues.png)
+
+Y un diagrama de estados y colas
+
+![](img-silver/3-processes/queue-progression.png)
+
+Ni bien entra se pone en ready, y despues puede hacer IO y caer en una IO queue,
+o puede crear un proceso y esperar a que termine, o puede ser sacado del core
+por una interrupcion o que se le termino el tiempo.
+
+El rol del **CPU scheduler** es elegir de los procesos que estan en ready (en la
+ready queue) y asignarles un CPU core.
+
+#### Context switch
+
+Cuando llega una interrupcion y hay que cambiar de proceso, el SO debe guardar
+el **contexto** del actual para poder reestablecerlo luego, y cambiarlo con el
+del que le toca ejecutar. Este esta representado en la PCB del proceso. El
+proceso es llamado **context switch**.
+
+![](img-silver/3-processes/context-switch.png)
+
+### Operaciones en procesos
+
+#### Creation
+
+Un proceso puede crear otros procesos hijos, y ellos lo mismo, asi formando un
+**arbol** de ellos. Estos se identifican con un **process identifier** (pid)
+
+Para crear un proceso en UNIX, se usa la syscall `fork()`, que forkea el hilo de
+ejecución y retorna 0 si es el hijo y el PID si es padre. El hijo puede tirar
+`exec()` para cargar otro programa.
+
+![](img/api/fork.png)
+
+#### Termination
+
+Un proceso le dice al SO que lo borre con la syscall `exit()`, retornando un
+status value (int).
+
+Por lo general es el padre el que lo tiene que matar. Y algunos sistemas no
+dejan que los hijos existan si los padres terminaron, si uno termina, todos los
+hijos deben terminar. Esto seconoce como **cascading termination**.
+
+- Los procesos hijos que terminan no se sacan de la tabla de procesos para que
+  los padres puedan tener su status code, al hacer `wait()`. Entonces hasta que
+  los padres lo hagan, quedan como **zombies**.
+
+  Cuando el padre hace wait(), se sacan de la tabla y no son mas zombies.
+
+- Si el padre termina sin hacer `wait()`, quedan **orphans**. Aqui se hace que
+  su padre sea `init/systemd`, que periodicamente hace wait() haciendo que no
+  queden zombi.
+
+### IPC
+
+Los procesos pueden ser *independientes* si no comparten data con otros
+procesos, o *cooperating* si pueden afectar o ser afectados por otros procesos.
+Queremos que los procesos cooperen porque
+
+- Info sharing: concurrent access a la misma info
+- Computation speedup: Para dividir una tarea en subtareas que ejecuten en
+  parlelo (si hay mas de un core)
+- Modularidad
+
+Los procesos que cooperan requieren una manera de intercambiar datos entre si,
+**inter-process communication** (IPC). Hay dos modelos fundamentales: **shared
+memory** y **message passing**
+
+![](img-silver/3-processes/ipc-models.png)
+
+- Shared memory
+
+  Un cacho de memoria se comparte entre un conjunto de procesos, y de esta forma
+  pueden intercambiar info escribiendo y leyendo por ahi.
+
+- Message passing
+
+  Intercambian mensajes entre si, basicamente es posible un
+
+  - `send()`
+  - `receive()`
+
+  Que cada uno puede especificar de que proceso obtiene/envia el mensaje, o sino
+  con *mailboxes* que pueden ser de procesos o el SO.
+
+  Los sends/receives pueden ser blocking o non-blocking, y pueden estar
+  buffereados. (por ej. channels de go son blocking-blocking y pueden estar
+  buffereados)
+
+Ejemplos
+
+- POSIX shared memory
+- Match message passing
+  - Ports = mailboxes
+- Windows
+- Pipes
+
+### Client-server
+
+Formas mas comunes
+
+- Sockets
+- RPC
+
+### Chapter 3 Summary
+
+- Un proceso es un programa en ejecucion, cuyo status esta representado por el
+  PC y los registros.
+- Tiene 4 secciones: text, data, heap y stack.
+- Mientras ejecuta puede cambiar de estado. Hay 4 generales: ready, running,
+  waiting y terminated
+- La PCB (process control block) es la estructura de datos del kernel usada para
+  representar un proceso.
+
+- El rol del process-scheduler es elegir un proceso ready para que corra en un
+  CPU, y el de un cpu-scheduler es elegir en que cpu corre. Cuando se cambia de
+  proceso, se hace un **context-switch**
+- IPC: shared memory / message passing
+- Pipes: conducto para que procesos se comuniquen
+  - Ordinary: Comunicacion entre procesos con parent-child relationship.
+    Unidireccionales.
+  - Named: mas generales y dejan que mas de un proceso se comunique
+- Client-server
+  - Sockets: Dejan que dos procesos se comuniquen a traves de la red, pueden
+    estar en maquinas diferentes.
+  - RPC: Abstrae el concepto de llamados a procedimiento de forma tal que una
+    funcion se puede llamar en otro proceso que puede estar corriendo en otra
+    computadora.
