@@ -282,3 +282,216 @@ Más info en el libro.
 - GNU/Linux
 - BSD Unix
 - Solaris
+
+## 2 - Operating System Structures
+
+Objetivos:
+
+- Identificar servicios provistos por un SO
+- Ilustrar como las syscalls se usan para proveer servicios del SO
+- Comparar y contrastar tecnicas de diseño de SOs monolithic, layered,
+  microkernel, modular y hybrid.
+- Proceso de boot
+- Monitoreo de performance del sistema
+- Diseñar e implementar modulos de para interactuar con un kernel de Linux.
+
+### Services
+
+![services](img-silver/2-structures/services.png)
+
+### Interface
+
+- CLI
+
+  **shell**: Interpretes de comandos de los usuarios.
+
+- GUI
+- Touch
+
+Eleccion: suele ser personal preference
+
+El diseño de interfaces de usuario buenas e intuitivas no es tarea del SO.
+
+### Syscalls
+
+Las **syscalls** proveen una interfaz a los servicios del SO. Suelen ser
+funciones en C o C++, pero para algunas tareas muy low-level incluso en asm.
+
+#### API
+
+Application programming interface. Especifica las funciones que pueden usar y su
+signatura. Las mas comunes son
+
+- Windows API
+- POSIX API
+- Java API
+
+Las funciones de un API por abajo hacen syscalls on behalf del usuario.
+
+#### Tipos
+
+Describe las syscalls que se usan en cada categoria, mas en el libro.
+
+- **Process control**
+- **File management**
+- **Device management**
+- **Info maintenance**
+- **Communications**: Hay dos modelos principales
+  - Message passing: Los procesos intercambian mensajes entre si para transferir
+    info.
+  - Shared-memory
+
+- **Protection**
+
+### System Services
+
+Servicios que provee el sistema para su uso y desarrollo más simple.
+
+- Daemons: (o **services**, **subsystems**): System-program processes que estan
+  corriendo en todo momento.
+
+### Linkers & Loaders
+
+Para que un programa corra en la CPU, se tiene que cargar en memoria.
+
+1. Los archivos fuente se compilan a archivos objeto, que se cargan en memoria. Son
+  del formato **relocatable object file**
+2. El **linker** combina los archivos objetos en un solo binario **executable**
+   Durante esta fase, otros objetos o bibliotecas se pueden incluir, como la
+   libc math (-lm)
+
+3. Un **loader** se usa para cargar el binario a memoria, donde puede correr en
+   algun core.
+4. Tambien potencialmente se puede hacer **relocation**, que asigna la direccion
+   final de las partes del programa.
+
+5. No necesariamente todas las libs se tienen que cargar estaticamente, se
+   pueden cargar dinamicamente mientras se carga.
+   Evita linkear libs que no se usarian en el ejecutable.
+    - Windows: DLLs
+
+#### Formatos
+
+ELF: Executable and Linkable Format. Formato de UNIX.
+
+![ll](img-silver/2-structures/linker-loader.png)
+
+### OS Design & Implementation
+
+Tipos
+
+- Traditional desktop/laptop
+- Mobile
+- Distributed
+- Real time
+
+Goals:
+
+- **User goals**
+- **System goals**
+
+Es importante la separacion de
+
+- Policy: *what* will be done
+- Mechanism: *how* it will be done
+
+### OS Structure
+
+Como los componentes de un SO se interconectan y forman un kernel.
+
+- **Monolithic**
+
+  Todo en un solo binario que corre en un solo address space. Ejemplo: UNIX.
+
+  ![unix](img-silver/2-structures/unix-structure.png)
+
+  ![linux](img-silver/2-structures/linux-structure.png)
+
+  Contra:
+
+  - Difiles de implementar y extender
+  - Coupled: Cambios en una parte del sistema pueden llegar a afectar a otras
+    partes.
+
+  Pro
+
+  - Mas rapidos. No hay overhead en el system-call interface, comunicacion con el
+    kernel es rapida.
+
+- **Layered**
+
+  Loosely coupled: Cambios en una parte afectan solo ellas.
+
+  ![layer](img-silver/2-structures/layered-structure.png)
+
+  Cada capa se implementa usando funciones de las inferiores.
+
+  Se pueden debuggear nivel a nivel, de forma tal que cuando encontramos un
+  fallo, estamos seguros de que esta en el nivel que estamos debuggeando en ese
+  momento.
+
+- **Microkernels**
+
+  Ejemplo: Match
+
+  ![alt](img-silver/2-structures/mkernel-structure.png)
+
+  Se hace al kernel mas chiquito y el resto de las cosas programas de usuario.
+  Necesariamente los procesos se comunican con message passing a traves del
+  kernel, lo cual puede ser lento.
+
+  \+ es mas facil de extender
+  
+  \+ mas facil de portear
+
+  \- la performance puede ser peor por overhead en las syscalls, al ser codigo
+  de usuario.  
+
+- **Modules**
+
+  **LKM**: Loadable kernel modules. El kernel tiene un set de componentes core
+  que pueden ser linkeados con modulos adicionales en boot o runtime.
+
+- **Hybrid**
+
+### Building and booting
+
+Proceso de boot, bootloader, GRUB, UEFI / BIOS, etc.
+
+### Debugging
+
+Como hacer debugging en el kernel, [BCC](https://github.com/iovisor/bcc)
+
+### Summary
+
+- Un SO provee un entorno para la ejecucion de programas mediante servicios a
+  sus usuarios y programas.
+
+- Approaches principales para interactuar: CLI, GUI y touch
+- syscalls sirven para acceder a los servicios del SO. Los programadores usan la
+  API de ellas para acceder a sus servicios.
+
+- Categorias de syscalls: process control, file management, device management,
+  info maintenance, communications y protection.
+
+- La libc provee la API de syscalls para Unix y linux.
+- Los SOs vienen con una coleccion de system-programs que proveen utilidades a
+  usuarios.
+
+- Un **linker** combina varios *relocatable object files* a un solo binario
+  ejecutable. Un **loader** lo carga en memoria, donde puede correr en el CPU
+
+- Un SO se diseña con diferentes *goals* en mente. Esto determina sus
+  *policies*, que se implementan mediante *mechanisms*
+
+  - Monolithic: No tiene estructura, toda la funcionalidad se provee en un solo
+    bonario que corre en un solo espacio de direcciones. Eficientes
+  - Layered: Se divide en una cantidad finita de capas, donde la mas baja es el
+    HW y la mas alta el UI. Tiene problemas de performance
+  - Microkernel: Kernel minimo y el resto userland programs. Se comunican con
+    message-passing.
+  - Modular: Servicios de kernel como modulos que se pueden cargar y sacar en
+    runtime. (por ej. drivers)
+  - La mayoria de los SOs modernos son un hybrido entre modular y monolithic.
+
+- Un **boot loader** carga un SO a memoria, lo inicializa y ejecuta.

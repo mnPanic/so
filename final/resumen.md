@@ -34,16 +34,16 @@
 
 ## Temas
 
-- Procesos y API del SO
-- Scheduling
-- Sync entre procesos
+- Procesos y API del SO (2)
+- Scheduling (3)
+- Sync entre procesos (4, 5, 6)
 - Programación concurrente
-- Administración de memoria
-- Administración de E/S
-- File systems
-- Protección y seguridad
-- Sistemas distribuidos
-- "Conceptos avanzados"
+- Administración de memoria (7)
+- Administración de E/S (8)
+- File systems (9)
+- Protección y seguridad (10)
+- Sistemas distribuidos (11, 12)
+- "Conceptos avanzados" (13, 14)
   - Virtualización, contenedores, cloud computing.
 
 ## Intro
