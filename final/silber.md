@@ -468,7 +468,7 @@ Proceso de boot, bootloader, GRUB, UEFI / BIOS, etc.
 
 Como hacer debugging en el kernel, [BCC](https://github.com/iovisor/bcc)
 
-### Summary
+### Chapter 2 Summary
 
 - Un SO provee un entorno para la ejecucion de programas mediante servicios a
   sus usuarios y programas.
@@ -719,3 +719,176 @@ Formas mas comunes
   - RPC: Abstrae el concepto de llamados a procedimiento de forma tal que una
     funcion se puede llamar en otro proceso que puede estar corriendo en otra
     computadora.
+
+## Chapter 4 - Threads & Concurrency
+
+El modelo del chapter 3 asumia que habia un solo thread, pero puede haber mas.
+
+Objetivos:
+
+- Que es un thread y las diferencias con un proceso
+- Beneficios y desafios de diseñar procesos multithreaded
+- Approaches a implicit threading: thread pools, fork-join, Grand Central
+  Dispatch.
+- Windows/linux threads
+
+### Overview
+
+Un thread es la unidad basica de utilización del CPU. Tiene como componentes
+
+- Thread ID
+- PC (Program Counter)
+- Registros
+- Stack
+
+Y comparte con los otros threads del mismo proceso las secciones de codigo,
+data, files abiertos, signals.
+
+![](img-silver/4-threads/single-multi.png)
+
+Un ejemplo de uso es un webserver que para atender a cada cliente usa un thread
+diferente.
+
+Beneficios:
+
+- **Responsiveness**: Por ej. si un usuario toca un boton y eso causa un computo
+  intensivo, si fuera single-threaded la app se traba, pero sino se puede hacer
+  en un thread a parte y no se pierde la interactividad.
+- **Resource sharing**: Los procesos solo pueden usar IPC (shared memory,
+  message passing) para compartir recursos, mientras los threads comparten
+  memoria y los recursos por default.
+- **Economy**: Suele ser mas eficiente crear threads que procesos. En particular
+  es mucho mas rapido el context-switch.
+- **Scalability**
+
+### Multicore programming
+
+Concurrencia no es lo mismo que paralelismo. Un sistema **concurrente** soporta
+mas de una tarea permitiendo que todas *progresen*, mientras que uno paralelo
+ejecuta mas de una al mismo tiempo. El paralelismo existe cuando mas de una
+tarea esta haciendo progreso en simultaneo.
+
+Se puede tener concurrencia sin paralelismo, y el paralelismo requiere un
+sistema multicore.
+
+Desafíos a la hora de programar multithreaded:
+
+- Identificar tareas a dividir en separadas concurrentes.
+- Balancear el trabajo de cada una
+- Separar los datos para que sean accedidos en cores diferentes
+- Dependencias de datos entre tareas (sync)
+- Testing y debugging es más difícil
+
+#### Types of parallelism
+
+![](img-silver/4-threads/data-task-paralelism.png)
+
+Hay dos tipos de paralelismo en general
+
+- **Data parallelism**: Separar data en cores y hacer la misma operacion en
+  todos.
+
+  > Por ej. sumar los contenidos de un array. Cada thread puede sumar un cacho.
+
+- **Task parallelism**: Distribuir no la data, pero las tareas en distintos
+  cores. Cada thread hace una operacion diferente, que podria estar usando la
+  misma data. Requiere sync.
+
+  > Por ej. dos threads haciendo operaciones estadisticas diferentes sobre el
+  > mismo array, como la media y el promedio.
+
+### Multithreading models
+
+![](img-silver/4-threads/user-kernel-threads.png)
+
+El soporte de threads puede ser a nivel de usuario (**user threads**) o por el
+kernel (**kernel threads**). Tiene que existir una relación entre ambos.
+
+Las aplicaciones de usuario crean user-level threads, que luego son mapeados a
+kernel threads. Hay tres modelos principales
+
+- **many-to-one**
+
+  ![](img-silver/4-threads/many2one.png)
+
+  El threading se hace en user-space. El proceso entero se bloquea si un thread
+  hace una syscall bloqueante. No pueden correr en paralelo porque uno solo
+  puede acceder al kernel a la vez.
+
+  No se usa mucho.
+
+- **one-to-one**
+
+  ![](img-silver/4-threads/one2one.png)
+
+  Mapea cada user thread a un kernel thread. Tiene mas concurrencia que el
+  anterior y permite paralelismo.
+
+  Lo malo es que crear un thread de usuario requiere crear un thread de kernel,
+  lo cual lo hace mas costoso.
+
+- **many-to-many**
+
+  ![](img-silver/4-threads/many2many.png)
+
+  Multiplexa muchos user threads a menos (o la misma cantidad) de kernel
+  threads.
+  
+  Una variacion tambien permite un user-level thread one to one. Se le llama
+  **two-level model**.
+
+  ![](img-silver/4-threads/two-level.png)
+
+### Thread Libraries
+
+Una **thread library** le da a un programador una API para crear y manejar
+threads. Puede ser user-space o kernel-space (soportada por el SO)
+
+- POSIX pthreads
+- Windows: kernel
+- Java: Por abajo usa windows o posix.
+
+### Implicit Threading
+
+La estrategia de **implicit threading** consiste en mover la creacion de threads
+a compiladores y bibliotecas de runtime. Por lo general involucran que los
+programadores identifiquen *tareas* que pueden correr en paralelo, en vez de
+threads.
+
+Approaches
+
+- **Thread pools**: Tener un pool de threads que se crean al inicio y se
+  reutilizan, en vez de crear y destruir cada uno.
+
+- **fork-join**: El padre *forkea* creando multiples hilos de ejecucion, y luego
+  espera que terminen (*join*), punto en el cual combina sus resultados.
+
+  ![](img-silver/4-threads/fork-join.png)
+
+- **OpenMP**: Son directivas del compilador y APIs que permiten identificar
+  regiones paralelas como bloques de codigo que pueden correr en paralelo.
+
+- **Grand Central Dispatch** (GCD)
+
+### Threading issues
+
+- `fork()` y `exec()`, copian threads o mantienen? Parametrizado
+- Las signals quien las maneja?
+- Cancelar threads: Se puede hacer de dos maneras
+  - Async cancellation: Para a un thread inmediatamente, aunque este en el medio
+    de algo.
+  - Deferred cancellation: Le informa al thread que deberia terminar pero lo
+    deja hacer de una manera ordenada.
+
+  Se suele preferir *deferred*.
+
+- Thread local storage (TLS)
+- Scheduler activations
+
+### Implementación
+
+En Linux, no hay distinción entre threads y procesos, son ambos *tasks*. Los
+threads se crean con la syscall `clone()`.
+
+## Chapter 5 - CPU Scheduling
+
