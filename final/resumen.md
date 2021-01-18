@@ -4,14 +4,17 @@
   - [Bibliografia](#bibliografia)
     - [Silber](#silber)
   - [Temas](#temas)
-  - [Intro](#intro)
+  - [1 - Intro](#1---intro)
     - [Elementos básicos](#elementos-básicos)
-  - [Procesos y API del SO](#procesos-y-api-del-so)
+  - [2 - Procesos y API del SO](#2---procesos-y-api-del-so)
     - [Procesos](#procesos)
     - [Scheduler](#scheduler)
     - [Multiprogramación](#multiprogramación)
       - [Estado de un proceso](#estado-de-un-proceso)
     - [IPC - InterProcess Communication](#ipc---interprocess-communication)
+  - [3 - Scheduling](#3---scheduling)
+    - [Tipos de scheduling](#tipos-de-scheduling)
+    - [Politicas](#politicas)
 
 ## Bibliografia
 
@@ -46,7 +49,7 @@
 - "Conceptos avanzados" (13, 14)
   - Virtualización, contenedores, cloud computing.
 
-## Intro
+## 1 - Intro
 
 - Mutliprogramación: aumenta el **throughput** (rendimiento)
 - Contención: Varis programas pueden querer acceder a un mismo recurso a la vez.
@@ -71,7 +74,7 @@
 - Usuario: Repr dentro del SO de las personas o entidades que pueden usarlo. Sirven para aislar info entre si y establecer permisos.
 - Grupo: coleccion de usuarios.
 
-## Procesos y API del SO
+## 2 - Procesos y API del SO
 
 ### Procesos
 
@@ -195,3 +198,98 @@ Puede ser:
 - Async: El emisor envia algo que el receptor recibe en algun momento, requiere
   algun mecanismo adicional para recibir la respuesta y saber si llego.
   Libera al emisor para que haga otras tareas.
+
+## 3 - Scheduling
+
+La **política de scheduling** es tan importante que es una de las
+características principales de un SO, y algunos proveen más de una. Tiene un
+gran impacto en el rendimiento.
+
+Goals:
+
+- **Fairness (equanimidad)**: Cada proceso reciba una parte justa del CPU
+- **Eficiencia**: Que la CPU este ocupada todo el tiempo
+- **Carga del sistema**: Minimizar cantidad de procesos en ready
+- **Tiempo de respuesta**: Minimizar el tiempo de respuesta *percibido* por los
+  usuarios interactivos
+- **Latencia**: Minimizar el tiempo requerido hasta que un proceso empieza a dar
+  resultados.
+- **Tiempo de ejecucion**: Minimizar el tiempo total de ejecucion de un proceso.
+- **Throughput (rendimiento)**: Maximizar el nro de procesos terminados por
+  unidad de tiempo.
+- **Liberacion de recursos**: Hacer que terminen cuanto antes los procesos que
+  tienen reservados mas recursos.
+
+Muchos son contradictorios. Cada política busca maximizar una función objetivo,
+que es una combinación de los goals tratando de impactar lo minimo el resto.
+
+### Tipos de scheduling
+
+- **cooperativo**: El sched analiza la situacion cuando toma control el kernel
+  (con syscalls), en especial con IO. A veces se proveen syscalls especificas
+  para pasar el turno.
+- **con desalojo** (preemtive, apropiativo): El scheduler se cuelga a la
+  interrupcion del clock para decidir si le toca ejecutar al proceso actual u
+  otro.
+
+  Suele ser deseable pero requiere mas hardware (clock con interrupciones) y no
+  da garantia de continuidad a los procesos, que podria ser un problema en un SO
+  real time.
+
+### Politicas
+
+- FIFO (o FCFS, First Come First Served)
+
+  Supone que todos los procesos son iguales, pero si llega un proceso polenta
+  que requiere mucha CPU genera **inanición** (**starvation**) para todos los
+  demas. Los de mayor prioridad demoran infinitamente a los de menor, que nunca
+  llegan a ejecutarse.
+
+  Cualquier esquema de prioridades fijas corre riesgo de inanicion.
+
+- Round robin
+
+  Darle un quantum a cada proceso y alternar entre ellos.
+
+  Como elegir el quantum?
+
+  - Muy largo: En SO interactivos pareceria que el sistema no responde
+  - Muy corto: Se nota el overhead de scheduling+context switch
+
+  Se lo suele combinar con prioridades.
+
+- Multiples colas
+
+  Colas con 1, 2, 4, 8 quantum. A la hora de elegir un proceso para correr, la
+  prioridad la tiene siempre la cola menor. Cuando un proceso no le alcanza el
+  CPU se pasa a la siguiente, lo cual disminuye su prioridad, pero le toca mas
+  tiempo en el CPU la proxima.
+
+  Los procesos interactivos van a la cola de maxima prioridad, y se puede hacer
+  que cuando alguno termina de hacer IO vaya a la 1ra porque tenderia a volver a
+  ser interactivo.
+
+  La idea general es minimizar el tiempo de respuesta de los procesos
+  interactivos.
+
+- SJF (*Shortest Job First*)
+
+  Para sistemas donde prediminan los trabajos batch, orientada a maximizar el
+  throughput.
+
+  Si uno conoce las duraciones de antemano, es optimo en cuanto a latencia
+  promedio. Y sino, muchas veces se pueden predecir, pero puede salir mal si los
+  procesos tienen comportamiento irregular.
+
+- Scheduling en RT (Real time)
+
+  Las tareas tienen *deadlines* estrictos, se usan en entornos criticos. Una
+  politica posible seria EDF: Earliest Deadline First.
+
+- Scheduling en SMP
+
+  El problema es la **afinidad** de un proceso a un CPU, por la cache.
+
+  A veces se intenta distribuir la carga entre los procesadores, con *push
+  migration* y *pull migration*
+
