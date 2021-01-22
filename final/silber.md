@@ -892,3 +892,284 @@ threads se crean con la syscall `clone()`.
 
 ## Chapter 5 - CPU Scheduling
 
+En general se schedulea *kernel-threads* en vez de procesos en los sistemas
+modernos. Estos corren en los *cores* del CPU.
+
+Objetivos:
+
+- Describir CPU scheduling algorithms
+- Evaluarlos
+- Explicar problemas de scheduling
+- Describir algoritmos para real time scheduling
+- Describir los usados en Windows, Linux y Solaris
+- Aplicar modelados y simulaciones para evaluarlos
+- Diseñar un programa que los implemente
+
+### Scheduling concepts
+
+En un sistema con un solo core, cada tarea debe esperar a que se libere para
+poder ejecutar. El objetivo de la **multiprogramacion** (multiprogramming) es
+que haya siempre uno corriendo, para maximizar la utilizacion de CPU.
+
+Un proceso se ejecuta hasta que debe esperar algo (tipicamente IO). En un
+sistema simple, el CPU se quedaria idle esperando a que termine, pero en uno con
+multiprogramacion se swapea el CPU a otro proceso.
+
+El **CPU scheduler** es el que se encarga de elegir que proceso en ready va a
+correr en que CPU.
+
+#### IO Burst cycle
+
+![](img-silver/5-scheduling/io-burst.png)
+
+La ejecucion de todo proceso consiste en un **ciclo** de ejecucion en la CPU y
+IO wait. Alternan entre ambos: **IO burst** y **CPU burst**.
+
+La distribucion se midio a ser la siguiente:
+
+![](img-silver/5-scheduling/burst-dist.png)
+
+#### Preemptive / non-preemptive
+
+Hay 4 situaciones en las cuales se podria tomar una decision de scheduling
+
+1. running -> waiting (io wait, `wait()`)
+2. running -> ready (interrupt)
+3. waiting -> ready (io finish)
+4. process termination
+
+En 1 y 4 si o si se debe elegir uno, pero con 2 y 3 hay una elección.
+
+- Cuando no se hace nada en 2 y 3, decimos que es **noonpreemptive** o
+  **cooperativo**: Una vez que se le dio el CPU a un proceso, lo usa hasta que
+  se ponga en waiting o termine.
+
+- Sino, **preemptive**: Todos los modernos usan este. *Preemption* Puede
+  resultar en race conditions.
+
+Tambien:
+
+- Preemtpive: Se puede sacar el CPU de un proceso
+- Nonpreemptive: Un proceso debe necesariamente dar el control del CPU.
+
+#### Dispatcher
+
+El **dispatcher** es el modulo de kernel que le da el control del CPU al proceso
+seleccionado por el scheduler. Involucra
+
+- Context switch de un proceso a otro
+- Cambiar a modo usuario
+- JMP al PC del nuevo programa para resumir.
+
+Debe ser lo mas rapida posible ya que se invoca cada context switch. El tiempo
+que tarda es conocido como **dispatch latency**.
+
+![](img-silver/5-scheduling/dispatcher.png)
+
+### Scheduling criteria
+
+Criterios para juzgar que tan buenos son los algoritmos
+
+- **Uso de CPU** (max): Queremos que este ocupado
+- **Throughput** (max): Cantidad de procesos que terminan por unidad de tiempo.
+- **Turnaround time** (min): Cuanto tarda desde que se pone en ready hasta que
+  termina cada proceso.
+- **Waiting time** (min): Suma de tiempos esperando en la cola de ready (no
+  waiting por IO, porque eso no es controlado por el scheduler)
+- **Response time** (min): Tiempo hasta el primer resultado, mejor que
+  turnaround para sistemas interactivos.
+
+### Scheduling algorithms
+
+- **FCFS** (First come, first served)
+
+  El que lo pide primero es asignado primero. Se implementa facil con un FIFO
+  queue.
+
+  Es nonpreemptive
+
+- **SJF** (Shortest job first)
+
+  Asocia con cada proceso la longitud de su siguiente burst de CPU, y cuando
+  esta disponible se lo asigna al que tenga el mas corto (se usa FCFS para
+  romper empates).
+
+  Es óptimo en cuanto a avg waiting time (porque siempre es mejor poner uno mas
+  corto antes de uno mas largo) pero no se puede saber cual va a ser la longitud
+  del siguiente burst. Para esto se puede predecir con un **exponential
+  average**.
+
+  Puede ser preemptive (suele llamarse shortest remaining time first) o
+  nonpreemptive.
+
+- **RR** (Round robin)
+
+  Es similar a FCFS, pero con preemption. Se define un **time quantum** o **time
+  slice**, tiempo que tiene cada proceso para ejecutar en la CPU (Generalmente
+  10-100ms) luego del cual se lo saca y se pone al siguiente. Se trata a la
+  ready queue como una cola circular.
+
+  Queremos que el quantum sea
+
+  - Grande con respecto al context-switch
+  - No demasiado grande, sino se convierte en FCFS
+
+  Rule of thumb: 80% de los CPU-bursts deberian ser mas cortos que el quantum.
+
+- **Priority**
+
+  SJF es un caso particular. Se le asocia una prioridad a cada proceso y se
+  despacha el de maxima, con FCFS para romper empates. Estas pueden ser internas
+  (del SO) o externas (asignadas por usuarios)
+
+  Puede ser preemptive o nonpreemptive.
+
+  Puede llegar a producir **indefinite blocking** o **starvation** de procesos
+  con baja prioridad. Una solucion posible es **aging**: de a poco incrementar
+  la prioridad de los procesos que esperan por periodos prolongados de tiempo.
+
+  Otra es combinarlo con round-robin, si hay mas de uno de una prioridad
+  correrlos con round robin.
+
+- **Multilevel queue**
+
+  Los procesos se pueden poner en una sola cola para ejecutar, pero depende de
+  como esten manejadas podria tomar O(n) determinar el de maxima prioridad.
+  Suele ser mas practico entonces tener una queue por prioridad, donde cada una
+  puede tener una politica diferente.
+
+  ![](img-silver/5-scheduling/priority-queue.png)
+
+  Tambien se puede tener una queue por tipo de proceso (RT, interactivo,
+  background) cada una con su politica, y luego otra para decidir entre ellas.
+
+- Multilevel feedback queue
+
+  Permite que los procesos cambien de cola. Por ej. si uno usa mucho CPU, baja
+  prioridad. Esto hace que los que son IO-bound e interactivos tengan mas
+  prioridad (suelen tener CPU-bursts cortos).
+
+  Y un proceso que espera mucho en una cola de baja prioridad puede subir
+  (aging), evitando starvation.
+
+  Es el mas general. Se puede configurar para matchear cualquiera de los
+  anteriores.
+
+### Thread scheduling
+
+En la mayoria de los SOs modernos se schedulean kernel-level threads en vez de
+procesos.
+
+### Multiprocessor scheduling
+
+Si hay mas de un core es posible el **load sharing**: cuando threads pueden
+correr en paralelo.
+
+Multiprocessor puede ser
+
+- Multicore CPUs
+- Multithread cores
+- NUMA
+- Multiprocesamiento heterogeneo (HMP): no todos los CPUs son iguales, permite
+  que se asignen tareas que consumirian mucho pero que son background a
+  procesadores mas chicos
+
+#### Approaches
+
+- **asymmetric multiprocessing**: Hay un CPU maestro que ejecuta solo el codigo
+  de kernel, y el resto hace solo codigo de usuario. Se vuelve un bottleneck
+- **SMP**: Cada uno puede tener su propia cola o puede haber una en comun (ojo
+  con las race conditions, si se usa lock podria ser bottleneck)
+
+  ![](img-silver/5-scheduling/multiprocessing-ready-queue.png)
+
+#### Multicore
+
+Mas en el libro
+
+- Chip multithreading (hyperthreading en intel)
+  Cada CPU puede tener mas de un **hardware thread**, y desde el SO cada uno es
+  un CPU logico diferente.
+
+#### Load Balancing
+
+Es importante en SMP mantener el workload balanceado (suponiendo una queue por
+proceso). Para esto se hace **load balancing**. Approaches:
+
+- **push migration**: Una tarea chequea el load en cada proceso y los distribuye
+  equitativamente pusheando threads de uno al otro.
+- **pull migration**: Un CPU idle *pullea* un task en waiting de otro.
+
+#### Processor affinity
+
+Si se migra un thread de un CPU a otro se pierde la (warm) cache y tiene que
+llenarse devuelta. Esto se llama **processor affinity**, un proceso tiene
+afinidad por el procesador en el que esta corriendo. Las ready-queues por CPU
+hacen que lo tengamos gratis, mientras que tener una comun no.
+
+- soft affinity: cuando es best-effort que se mantenga la afinidad
+- hard affinity: cuando se cumple si o si, con syscalls se configura.
+
+### Real time scheduling
+
+(No lo dio muy en detalle chapa, lo nombró por arriba)
+
+- **soft RT**: no hay garantias de cuando un proceso RT critico se schedulea
+  
+  Los sistemas soft real time le dan prioridad a las tareas real-time sobre las
+  que no, pero no dan garantias.
+
+- **hard RT**: un task tiene que ejecutarse antes de su deadline si o si.
+
+  Los sitemas hard RT proveen garantias de tiempo para las RT tasks.
+
+Hay que minimizar el **event latency**: el tiempo desde que ocurre un evento
+hasta que se atiende. Dos tipos de latencia
+
+- Interrupt latency
+- Dispatch latency
+
+Algoritmos:
+
+- Priority based scheduling
+- Rate-Monotonic scheduling: Asigna tareas periodicas usando una static priority
+  policy con preemtpion.
+- EDF (Earliest deadline first) scheduling: Asigna prioridades segun el
+  deadline. Mientras mas cercano, mas alta la prioridad.
+- Proportional share scheduling: Asigna *T* particiones a todas las apps. Si a
+  una se le asignan N particiones (*shares*) tiene garantizado ejecutar N/T en
+  el procesador.
+
+### OS Scheduling examples
+
+- Linux
+  - Implementa un CFS (*Completely fair scheduler*), que asigna una proporcion
+    del CPU a cada tarea. Se basa en el virtual runtime (`vruntime`) del task.
+- Windows: Preemtpive, 32-level priority scheme.
+- Solaris
+
+### Algorithm evaluation
+
+Primero se define un criterio para seleccionar un algoritmo.
+
+- **Deterministic modeling** es un tipo particular de **analytic evaluation**.
+  Toma un workload (conjunto de procesos, orden, prioridad, etc.) de input y
+  corre los diferentes algoritmos para ver cuál da mejor en cuanto a performance
+  de cierta métrica (por ej. waiting time).
+
+  > (esto es lo que haciamos en la practica)
+
+  Como depende del caso particular que le dan, sirve solo para ejemplos y
+  explicar algoritmos.
+
+- **Modelos de colas**: matematicamente se predicen parametros
+- **Simulaciones**: Se programa un modelo del sistema y se obtiene telemetria.
+  Los eventos se pueden generar de forma random (puede seguir una dist) o con un
+  **trace file**: copiar un comportamiento que haya sucedido en el sistema.
+
+  ![](img-silver/5-scheduling/eval-by-sim.png)
+
+- **Implementacion**: La unica manera accurate de saber que tan bueno es, es
+  programarlo y probarlo en un sistema real.
+
+# Part three - Process Synchronization
