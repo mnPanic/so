@@ -1,3 +1,7 @@
+<!-- markdownlint-disable MD045 MD046 -->
+<!-- MD046/code-block-style - Code block style (fenced / indented) -->
+<!-- MD045/no-alt-text: Images should have alternate text (alt text) -->
+
 # Resumen final SO
 
 - [Resumen final SO](#resumen-final-so)
@@ -15,6 +19,30 @@
   - [3 - Scheduling](#3---scheduling)
     - [Tipos de scheduling](#tipos-de-scheduling)
     - [Politicas](#politicas)
+  - [4 - Sync entre procesos](#4---sync-entre-procesos)
+    - [Secciones criticas (CRIT)](#secciones-criticas-crit)
+    - [TAS (Test & Set)](#tas-test--set)
+    - [Primitivas de sync](#primitivas-de-sync)
+      - [Semáforos](#semáforos)
+        - [Motivación - Bounded buffer (productor-consumidor)](#motivación---bounded-buffer-productor-consumidor)
+        - [Definición](#definición)
+        - [Deadlock](#deadlock)
+      - [Objeto atómico](#objeto-atómico)
+      - [TAS Lock / Spin Lock](#tas-lock--spin-lock)
+      - [TTASLock / Local spinning](#ttaslock--local-spinning)
+      - [CAS](#cas)
+      - [Monitores](#monitores)
+      - [Variables de condicion](#variables-de-condicion)
+    - [Modelos](#modelos)
+      - [Condiciones de Coffman](#condiciones-de-coffman)
+      - [Digrafos bipartitos](#digrafos-bipartitos)
+    - [Inconvenientes de sync](#inconvenientes-de-sync)
+    - [Correctitud (propiedades)](#correctitud-propiedades)
+      - [Modelo de proceso](#modelo-de-proceso)
+      - [LTL](#ltl)
+      - [Propiedades](#propiedades)
+    - [Livelock](#livelock)
+    - [Problemas clasicos](#problemas-clasicos)
 
 ## Bibliografia
 
@@ -293,3 +321,475 @@ que es una combinación de los goals tratando de impactar lo minimo el resto.
   A veces se intenta distribuir la carga entre los procesadores, con *push
   migration* y *pull migration*
 
+## 4 - Sync entre procesos
+
+Como hacer para que los procesos puedan cooperar sin estorbarse
+
+Ejemplo: Fondo de donaciones, sorteo entre los donantes, dar numeros. Dos
+procesos tienen que incrementar el numero de ticket y manejar el fondo
+acumulado.
+
+<table>
+  <thead><tr><th>C</th><th>ASM</th></tr></thead>
+  <tbody>
+  <tr><td>
+
+    ```c
+    int ticket = 0;
+    int fondo = 0;
+
+    int donar(int donacion) {
+      fondo += donacion;
+      ticket++;
+      return ticket;
+    }
+    ```
+
+    </td><td>
+
+    ```asm
+    load fondo
+    add donacion
+    store fondo
+
+    load ticket
+    add 1
+    store ticket
+
+    return reg
+    ```
+  </td></tr>
+  </tbody>
+</table>
+
+Como dos procesos ejecutan el **mismo** programa, y comparten las variables
+`fondo` y `ticket`, podria suceder que el `store` de uno pise los cambios del
+otro.
+
+Toda ejecucion deberia dar un resultado equivalente a **alguna secuencial** de
+los mismos procesos. Como esto no sucede, pueden ocurrir **condiciones de
+carrera** (o *race conditions*)
+
+### Secciones criticas (CRIT)
+
+Una forma posible de solucionar race conditions, lograr *exclusion mutua*
+mediante **secciones criticas**. Estas son un cacho de codigo que
+
+- Solo hay un proceso a la vez en CRIT
+- Todo proceso que esta esperando para entrar, va a entrar a CRIT
+- Ningun proceso fuera de CRIT puede bloquear a otro.
+
+Pero como se implementa? Por lo general con ayuda del hardware.
+
+Depende de la granularidad con la que se definan, puede haber más o menos
+concurrencia.
+
+- CRIT es toda la función, menor concurrencia
+
+  ```c
+  crit int donar(...) { ... }
+  ```
+
+- CRIT es un bloque, mayor concurrencia
+
+  ```c
+  int donar(int n) {
+    int tmp;
+    crit { fondo += donacion; }
+    crit { tmp = ++ticket; }
+    return tmp;
+  }
+  ```
+
+### TAS (Test & Set)
+
+Instruccion que permite establecer **atomicamente** el valor de un `int` en 1,
+llamada `TestAndSet`. Pone 1 y devuelve el valor anterior de manera *atomica*,
+indivisible, incluso con varios CPUs.
+
+```c
+// pseudocodigo de TAS, pero en realidad esta en asm.
+bool TestAndSet(bool *dest) {
+  bool res = *dest;
+  *dest = true;
+  return res;
+}
+```
+
+Y ejemplo de uso para usar un lock
+
+```c
+bool lock;
+void main() {
+  while(true) {
+
+    // Si da true estaba lockeado, entonces sigo esperando.
+    // Busy waiting
+    while (TestAndSet(&lock));
+
+    // Estoy en CRIT
+
+    lock = false;
+
+    // Salgo de CRIT
+  }
+}
+```
+
+El codigo hace **busy waiting** (o *espera activa*) porque consume tiempo de la
+CPU para ver si esta tomado el lock.
+
+### Primitivas de sync
+
+#### Semáforos
+
+##### Motivación - Bounded buffer (productor-consumidor)
+
+Ambos comparten un buffer de tamaño limitado (bounded), el productor pone
+elementos y el consumidor los saca. Ademas, si quieren poner algo cuando el
+buffer esta lleno o sacar algo cuando esta vacio deben esperar.
+
+No podemos usar `sleep()` y `wakeup()` porque el wakeup se podria perder en
+algun interleaving.
+
+```c
+// productor
+if (cant == 0) sleep();
+
+// consumidor
+agregar(item, buf); cant++; wakeup();
+```
+
+| Consumidor | Productor        | Vars                 |
+| ---------- | ---------------- | -------------------- |
+|            |                  | cant = 0, buf = []   |
+|            | agregar(i1, buf) | cant = 0, buf = [i1] |
+| cant = 0?  |                  |
+|            | cant++; wakeup() | cant = 1             |
+| sleep()    |                  |
+
+Se pierde el `wakeup()` del productor, *lost wakeup problem*
+
+##### Definición
+
+Es un TAD que permite controlar el acceso a un recurso compartido por
+múltiples procesos.
+
+Tiene un valor al cual no podemos acceder. La única de interactuar con el
+semáforo es mediante las primitivas `wait()` y `signal()`, las cuales son
+**atómicas** a efectos de los procesos. (es decir, no se entrelazan con
+otros procesos, no debería haber condiciones de carrera por ese lado)
+
+Primitivas
+
+- `sem(uint val)`: Devuelve un nuevo semáforo inicializado en ese valor
+- `wait()`: Mientras el valor sea <= 0 se bloquea el proceso esperando
+  un signal. Luego decrementa el valor del semáforo.
+- `signal()`: Incrementa en uno el valor del semáforo y despierta a
+  *alguno* de los procesos que estén haciendo `wait` sobre él. El resto
+  quedan bloqueados
+
+Permite implementar un **mutex** (*mutual exclusion*)
+
+```c
+mutex = sem(1)
+
+wait(sem)   // "mutex.lock"
+signal(sem) // "mutex.unlock"
+```
+
+##### Deadlock
+
+Traen un problema, que es que si un proceso A espera a B, y B espera a A, el
+sistema se bloquea, un **deadlock**.
+
+![](img/sync/deadlock.png)
+
+#### Objeto atómico
+
+Es un objeto que provee `getAndSet()` y `testAndSet()`, implementa operaciones
+**indivisibles** a nivel de hardware.
+
+```c
+private bool reg;
+atomic bool get() { return reg; }
+atomic void set(bool b) { reg = b; }
+
+atomic bool getAndSet(bool b) {
+    bool m = reg;
+    reg = b;
+    return m;
+}
+
+atomic bool testAndSet() {
+    return getAndSet(true);
+}
+```
+
+#### TAS Lock / Spin Lock
+
+Es un mutex construido con `testAndSet()`
+
+```c
+class TASLock {
+    atomic<bool> reg;
+    void create() { reg.set(false); }
+    void lock() { while (reg.testAndSet()) {} } // no es atomico
+    void unlock() { reg.set(false); }
+}
+```
+
+Produce **busy waiting** pero puede tener un overhead menor
+al de usar semáforos.
+
+Ejemplo de uso
+
+```c
+TASLock mu;
+
+int donar(int donacion) {
+  int res;
+
+  // CRIT
+  mu.lock();
+  fondo += donacion;
+  mu.unlock();
+  // EXIT
+
+  // CRIT
+  mu.lock()
+  res = ticket; ticket++;
+  mu.unlock()
+  // EXIT
+
+  return res;
+}
+```
+
+Problemas:
+
+- No hay que olvidarse de hacer `unlock()` (sino, deadlock)
+- Produce **busy waiting**
+- Aun asi, puede tener menos overhead que semaforos
+
+#### TTASLock / Local spinning
+
+Testea anets de hacer test and set, de esta forma minimizando el impacto del
+busy waiting. Tambien se llama *local spinning*
+
+```c
+void lock() {
+    while true {
+        while(mtx.get());
+        if (!mtx.testAndSet()) return;
+    }
+}
+```
+
+*Local Spinning* es mas eficiente
+
+- Lee la memoria cache mientras sea verdadero
+- Cuando un proceso hace `unlock()` hay cache miss
+
+![TTASLock vs TASLock](img/sync/ttas-tas-comparison.png)
+
+#### CAS
+
+Otra primitiva es *Compare And Swap* o **CAS**
+
+```cpp
+atomic T compareAndSwap(T u, T v) {
+    T res = reg;
+    if (u == res) reg = v;
+    return res;
+}
+```
+
+#### Monitores
+
+Ver de bib
+
+#### Variables de condicion
+
+Ver de bib
+
+### Modelos
+
+Modelos para detectar / garantizar que no haya deadlocks
+
+#### Condiciones de Coffman
+
+Postulo una serie de condiciones necesarias para la existencia de un deadlock,
+pero tiene algunas falencias
+
+- **Exclusion mutua**: Un recurso no puede estar asignado a mas de un proceso
+- **Hold and wait**: Los procesos que ya tienen algun recurso pueden solicitar
+  otro.
+- **No preemption**: No hay mecanismo para quitarle recursos a un proceso
+- **Circular wait**: Tiene que haber un ciclo de N >= 2 procesos tq P_i espera
+  un recurso que tiene P_i+1
+
+#### Digrafos bipartitos
+
+- Nodos: Procesos y recursos
+- Aristas:
+  - p -> r si p **solicita** r
+  - r -> p si p **adquiere** r
+- Un deadlock es un **ciclo**.
+
+### Inconvenientes de sync
+
+Algunos problemas posibles son
+
+- Race conditions
+- Deadlocks
+- Starvation
+
+Y se pueden prevenir mediante
+
+- Patrones de diseño
+- Reglas de programacion
+- Prioridades
+- Protocolo (eg priority inheritance)
+
+O detectar mediante
+
+- Analisis de programas estatico o dinamico
+- En runtime, preventivo o recuperacion.
+
+### Correctitud (propiedades)
+
+La correctitud de un programa paralelo es un conjunto de propiedades que se
+plantean sobre toda ejecución. Como tienen muchas ejecuciones posibles, no nos
+basta con pre/post condiciones, o teorema del invariante.
+
+Para argumentar que una propiedad no es cierta, es necesario mostrar un
+*contraejemplo*, una sucesión de pasos que muestra una ejecución del sistema
+que no la cumpla.
+
+Tipos de propiedades:
+
+- **safety**
+  - Intuición: Nada malo sucede
+  - Nunca pasan cosas que no queremos que pasen
+  - Ejemplos: Mutex, ausencia de deadlock, no perdida de mensajes, etc.
+  - Definición: Tienen un *contraejemplo finito*
+- **progreso** o **liveness**
+  - Intuición: En algun momento algo bueno si va a suceder
+  - El sistema progresa, suceden cosas, el sistema no se queda bloqueado.
+  - Ejemplos: "Si se presiona el botón de stop, el tren frena", no inanición.
+  - Definición: Los contraejemplos no son finitos (una secuencia infinita de
+    pasos).
+- **fairness**
+  - Intuición: Los procesos reciben su turno con infinita frecuencia.
+  - "No se van a dar escenarios poco realistas en donde alguien es postergado
+    para siempre"
+  - En general se asume como valida para probar otras propiedades.
+
+La manera usual de mostrar la correctitud de este tipo de sistemas es plantear
+propiedades e safety y liveness, y demostrar que su combinacion implica el
+comportamiento deseado.
+
+En la practica se suelen usar versiones acotadas de estas propieades, y para
+trabajar con ellas se usan *logicas temporales* como LTL, CTL, TCTL, ITL, etc.
+
+#### Modelo de proceso
+
+![Modelo de proceso](img/sync/modelo-proceso.png)
+
+#### LTL
+
+```text
+T |= F?             los estados t satisfacen F
+
+F = p
+F = F1 AND F2
+F = F1 OR F2
+F = [] F1           en todos los estados vale
+
+Por ejemplo,
+
+[] NOT(deadlock)    en ningun estado de mi sistema hay un deadlock
+
+F = <> F1           en algun momento del futuro vale F1
+
+<> estado == final  en algun momento llego al estado final.
+
+[] (pedido => <> respuesta)     tipica propiedad de liveness
+```
+
+#### Propiedades
+
+- **WAIT-FREEDOM**
+
+  Todo proceso que intenta acceder a la sección crítica, en algún momento lo
+  logra, cada vez que lo intenta.
+
+  Para todo proceso, si está en un estado TRY, habrá un momento posterior en el
+  que estará en CRIT.
+
+  Intuicion: Libre de procesos que esperan para siempre.
+
+  *WAIT-FREEDOM* $\equiv \forall \tau \forall k \forall i \ \tau_k(i) = TRY
+  \implies \exists k' > k.\ \tau_{k'}(i) = CRIT$
+
+  Es una garantia demasiado fuerte.
+
+- **FAIRNESS - Equanimidad**
+
+  Para toda ejecucion $\tau$ y todo proceso $i$, **si** $i$ *puede* hacer una
+  transicion $l_i$ en una cantidad infinita de estados $\tau$ **entonces**
+  existe un $k$ tal que $\tau_k \xrightarrow{l_i} \tau_{k+1}$
+
+- **EXCL - Exclusión Mutua**
+
+  Para toda ejecución $\tau$ y estado $\tau_k$, no puede haber más de **un**
+  proceso $i$ tal que $\tau_k(i) = CRIT$
+
+  *EXCL* $\equiv \square \# CRIT \leq 1$
+
+- **LOCK-FREEDOM - Progreso del sistema**
+
+  Para toda ejecución y estado, si hay un proceso en TRY, y ninguno en CRIT,
+  entonces hay un estado posterior tal que algún proceso está en CRIT.
+
+  *LOCK-FREEDOM* $\equiv \square ( \#TRY \geq 1 \wedge \#CRIT = 0 \Rightarrow \lozenge
+  \#CRIT > 0)$
+
+- **DEADLOCK/LOCKOUT/STARVATION-FREEDOM - Progreso global dependiente**
+
+  Predicados auxiliares:
+
+  - *Lograr entrar*
+
+    $IN(i) \equiv i \in TRY \Rightarrow \lozenge i \in CRIT$
+
+  - *Salir*
+
+    $OUT(i) \equiv i \in CRIT \Rightarrow \lozenge i \in REM$
+
+  Para toda ejecución, si para todo estado y proceso i que está en crit, existe
+  un estado tal que sale, entonces para todo estado posterior y todo proceso
+  diferente, si intenta de entrar existe un estado para el cual entra.
+
+  Que todos salgan implican que todos van a entrar en algún momento.
+
+  *STARVATION-FREEDOM* $\equiv \forall i \square OUT(i) \Rightarrow \forall i \square
+  IN(i)$
+
+- **WAIT-FREEDOM - Progreso global absoluto**
+
+  Todo proceso entra a la sección crítica
+
+  *WAIT-FREEDOM* $\equiv \forall i \square IN(i)$
+
+### Livelock
+
+Un conjunto de procesos esta en **livelock** si estos continuamente cambian su
+estado en respuesta a cambios de estado de otros.
+
+Ej: queda poco espacio en disco. Proceso A detecta y notifica a proceso B
+(journal del sistema) que lo registra en disco, disminuyendo el espacio, lo que
+hace que lo detecte A... y asi.
+
+### Problemas clasicos

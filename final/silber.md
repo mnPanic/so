@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD025 MD045 -->
 <!-- MD025 single-title/single-h1 - Multiple top level headings in the same document -->
-<!-- MD045/no-alt-text: Images should have alternate text (alt text)markdownlintMD045 -->
+<!-- MD045/no-alt-text: Images should have alternate text (alt text) -->
 
 # Part one - Overview
 
