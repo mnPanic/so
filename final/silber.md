@@ -87,6 +87,17 @@
       - [Priority inversion](#priority-inversion)
     - [Evaluation](#evaluation)
   - [Chapter 7 - Sync Examples](#chapter-7---sync-examples)
+    - [Classic sync problems](#classic-sync-problems)
+      - [Bounded-Buffer](#bounded-buffer)
+      - [Readers-Writers](#readers-writers)
+      - [Dining-Philosophers](#dining-philosophers)
+    - [Sync dentro del kernel](#sync-dentro-del-kernel)
+    - [POSIX sync](#posix-sync)
+    - [Java sync](#java-sync)
+    - [Alternative approaches](#alternative-approaches)
+      - [Transactional Memory](#transactional-memory)
+      - [OpenMP](#openmp)
+      - [Functional Programming Languages](#functional-programming-languages)
 
 Notacion:
 
@@ -1671,3 +1682,258 @@ Cuando usar cada herramienta de sync
   - **High contention**: sync tradicional va a ser mas rapido que CAS
 
 ## Chapter 7 - Sync Examples
+
+Ejemplos clasicos de sync, y mecanismos usados por SOs reales.
+
+Objetivos:
+
+- Bounded buffer, readers-writers, dining-philosophers sync problems
+- Herramientas usadas por linux y windows para resolver process sync
+- POSIX / Java APIs
+
+### Classic sync problems
+
+(!) Problemas clasicos que se usan como ejemplos de clases mas grandes de
+concurrency-control problems. Se suelen usar para testear nuevos esquemas de
+sync.
+
+#### Bounded-Buffer
+
+```c
+// shared
+int n;
+sem mutex = 1;
+sem empty = n;
+sem full = 0;
+
+// producer
+while(true) {
+  // produce item in next_produced
+  wait(empty);
+  wait(mutex);
+
+  // add next_produced to the buffer
+  signal(mutex);
+  signal(full);
+}
+
+// consumer
+while(true) {
+  wait(full);
+  wait(mutex);
+
+  // remove item from buffer to next_consumed
+
+  signal(mutex);
+  signal(empty);
+
+  // consume item in next_consumed
+}
+```
+
+- `mutex` provee mutual exclusion al buffer
+- `empty` y `full` cuentan el numero de buffers llenos y vacios.
+
+#### Readers-Writers
+
+Una DB compartida entre procesos, en la que hay readers y writers. Puede haber
+multiples readers pero un solo writer.
+
+- *first* readers/writers problem: los readers no esperan si hay un writer
+  esperando.
+- *second*: los readers no pueden entrar si hay un writer esperando (i.e debe
+  entrar lo mas rapido posible)
+
+Cualquiera de las dos puede llevar a starvation.
+
+```c
+// sol a first
+// shared
+sem rw_mutex = 1;
+sem mutex = 1;    // mutex for read_count
+int read_count = 0; // counting semaphore
+
+// writer
+while(true) {
+  wait(rw_mutex);
+
+  // perform write
+
+  signal(rw_mutex);
+}
+
+// reader
+while (true) {
+  wait(mutex);
+  read_count++;
+
+  if (read_count == 1)
+    wait(rw_mutex);
+
+  signal(mutex);
+
+  // perform reading
+
+  wait(mutex);
+  read_count--;
+  if (read_count == 0)
+    signal(rw_mutex);
+  
+  signal(mutex);
+}
+```
+
+Se generaliza a **reader-writer locks**, en los que se especifica el tipo de
+acceso quse quiere tomar, y permite 1 writer o multiples readers
+
+#### Dining-Philosophers
+
+Es una representacion simple de la necesidad de asignar recursos a procesos
+de una forma deadlock-free y starvation-free.
+
+5 filosofos que comen y piensan. Cuando un filosofo piensa, no interactua.
+Cadtanto quieren comer pero para eso necesitan tomar ambos palillos (los mas
+cercanos), pero pueden levantar de a uno a la vez, y no se los pueden sacar.
+Cuando tienen ambos, comen. Cuando terminan, los largan y piensan.
+
+![](img-silver/6-sync/dining-philosophers.png)
+
+- Semaphores
+
+  Representar a cada palito con un semaforo.
+
+  ```c
+  while (true) {
+    wait(chopstick[i]);
+    wait(chopstick[(i+1) % 5]);
+    . . .
+    /* eat for a while */
+    . . .
+    signal(chopstick[i]);
+    signal(chopstick[(i+1) % 5]);
+    . . .
+    /* think for awhile */
+    . . .
+  }
+  ```
+
+  No es deadlock-free. Podria cada uno agarrar uno y quedarse todos en deadlock.
+  Posibles soluciones:
+
+  - Permitir a lo sumo 4 filosofos en la mesa
+  - Agarrar ambos en un critical section
+  - Usar una solucion asimetrica, en la que la mitad agarran de la izquierda
+    primero y la otra de la derecha.
+  
+  Todas estas soluciones lo hacen deadlock-free, pero no starvation-free.
+
+- Monitor
+
+  Tambien es correcta y deadlock-free, pero *no* starvation free.
+
+  ```c
+  monitor DiningPhilosophers
+  {
+    enum { THINKING, HUNGRY, EATING } state[5];
+    condition self[5];
+
+    void pickup(int i) {
+      state[i] = HUNGRY;
+      test(i);
+      if (state[i] != EATING)
+        self[i].wait();
+    }
+
+    void putdown(int i) {
+      state[i] = THINKING;
+      test((i + 4) % 5);
+      test((i + 1) % 5);
+    }
+
+    void test(int i) {
+      if ((state[(i + 4) % 5] != EATING) &&
+      (state[i] == HUNGRY) &&
+      (state[(i + 1) % 5] != EATING)) {
+        state[i] = EATING;
+        self[i].signal();
+      }
+    }
+
+    initialization_code() {
+      for (int i = 0; i < 5; i++)
+        state[i] = THINKING;
+    }
+  }
+  ```
+
+### Sync dentro del kernel
+
+Mecanismos de sync que brinda cada kernel, mas en el libro.
+
+### POSIX sync
+
+Provee una interfaz uniforme para sync a nivel de usuario
+
+- Mutex
+- Semaforos
+  - named: Se pueden compartir mediante su nombre por procesos unrelated.
+  - unnamed: Se deben compartir mediante shared memory.
+- Conditon variables: No se usan en el contexto de un monitor, y la exclusion
+  mutua se hace mediante un mutex.
+
+### Java sync
+
+Provee
+
+- Monitors: Todos los objetos tienen asociado un lock, y se puede marcar un
+  metodo como `synchronized` para que el usuario tenga que tener el lock para
+  usarlos. Se puede usar `wait()` y `notify()` desde los metodos.
+
+- Reentrant locks: Parecido a `synchronized`. Es como un lock pero permite que
+  el mismo thread haga lock mas de una vez (sino se quedaria bloqueado). Tambien
+  hay una version RW.
+
+- Semaphores: Provee un counting semaphore.
+- Condition variables: parecido a `wait()` y `notify()`.
+
+### Alternative approaches
+
+#### Transactional Memory
+
+Origina en teoria de base de datos. Una **memory transaction** es una secuencia
+de operaciones R/W a memoria atomicas. Si todas las operaciones se completan, la
+transaccion se *commitea*. Sino, se hace *rollback.*
+
+Por ejemplo se puede agregar a un lenguaje de programacion para reemplazar el
+uso de locks al acceder a data compartida. Por ejemplo agregando la expresion
+`atomic{S}` que asegura que S se ejecuta como una transaccion.
+
+```c
+void update() {
+  acquire();
+  // modify shared data
+  release();
+}
+
+// se convierte en...
+
+void update() {
+  atomic {
+    // modify shared data
+  }
+}
+```
+
+Se puede implementar en soft o hard
+
+- **Software transactional memory** (STM): exclusivamente desde el software, sin
+  hardware especial.
+- **Hardware transac: tional memory** (HTM)
+
+#### OpenMP
+
+Son directivas de compilador para denotar regiones criticas / paralelizables.
+
+#### Functional Programming Languages
+
+Como no hay estado ni mutabilidad, no hay race conditions.
