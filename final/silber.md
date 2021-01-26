@@ -1,6 +1,96 @@
 <!-- markdownlint-disable MD025 MD045 -->
 <!-- MD025 single-title/single-h1 - Multiple top level headings in the same document -->
 <!-- MD045/no-alt-text: Images should have alternate text (alt text) -->
+# TOC
+
+- [TOC](#toc)
+- [Part one - Overview](#part-one---overview)
+  - [Chapter 1 - Introduction](#chapter-1---introduction)
+    - [Organization](#organization)
+      - [Storage](#storage)
+    - [Architecture](#architecture)
+    - [OS Operations](#os-operations)
+      - [Modes of execution](#modes-of-execution)
+    - [Resource management](#resource-management)
+    - [Seguridad y protección](#seguridad-y-protección)
+    - [Virtualización](#virtualización)
+    - [Sistemas distribuidos](#sistemas-distribuidos)
+    - [Kernel Data Structures](#kernel-data-structures)
+    - [Computing environments](#computing-environments)
+    - [Free and Open-source OSs](#free-and-open-source-oss)
+  - [Chapter 2 - Operating System Structures](#chapter-2---operating-system-structures)
+    - [Services](#services)
+    - [Interface](#interface)
+    - [Syscalls](#syscalls)
+      - [API](#api)
+      - [Tipos](#tipos)
+    - [System Services](#system-services)
+    - [Linkers & Loaders](#linkers--loaders)
+      - [Formatos](#formatos)
+    - [OS Design & Implementation](#os-design--implementation)
+    - [OS Structure](#os-structure)
+    - [Building and booting](#building-and-booting)
+    - [Debugging](#debugging)
+    - [Chapter 2 Summary](#chapter-2-summary)
+- [Part two - Process Management](#part-two---process-management)
+  - [Chapter 3 - Processes](#chapter-3---processes)
+    - [Concepto de proceso](#concepto-de-proceso)
+      - [State](#state)
+      - [PCB](#pcb)
+    - [Process/CPU Scheduling](#processcpu-scheduling)
+      - [Context switch](#context-switch)
+    - [Operaciones en procesos](#operaciones-en-procesos)
+      - [Creation](#creation)
+      - [Termination](#termination)
+    - [IPC](#ipc)
+    - [Client-server](#client-server)
+    - [Chapter 3 Summary](#chapter-3-summary)
+  - [Chapter 4 - Threads & Concurrency](#chapter-4---threads--concurrency)
+    - [Overview](#overview)
+    - [Multicore programming](#multicore-programming)
+      - [Types of parallelism](#types-of-parallelism)
+    - [Multithreading models](#multithreading-models)
+    - [Thread Libraries](#thread-libraries)
+    - [Implicit Threading](#implicit-threading)
+    - [Threading issues](#threading-issues)
+    - [Implementación](#implementación)
+  - [Chapter 5 - CPU Scheduling](#chapter-5---cpu-scheduling)
+    - [Scheduling concepts](#scheduling-concepts)
+      - [IO Burst cycle](#io-burst-cycle)
+      - [Preemptive / non-preemptive](#preemptive--non-preemptive)
+      - [Dispatcher](#dispatcher)
+    - [Scheduling criteria](#scheduling-criteria)
+    - [Scheduling algorithms](#scheduling-algorithms)
+    - [Thread scheduling](#thread-scheduling)
+    - [Multiprocessor scheduling](#multiprocessor-scheduling)
+      - [Approaches](#approaches)
+      - [Multicore](#multicore)
+      - [Load Balancing](#load-balancing)
+      - [Processor affinity](#processor-affinity)
+    - [Real time scheduling](#real-time-scheduling)
+    - [OS Scheduling examples](#os-scheduling-examples)
+    - [Algorithm evaluation](#algorithm-evaluation)
+- [Part three - Process Synchronization](#part-three---process-synchronization)
+  - [Chapter 6 - Sync tools](#chapter-6---sync-tools)
+    - [Background](#background)
+    - [The Critical-Section Problem](#the-critical-section-problem)
+      - [Peterson's solution](#petersons-solution)
+    - [Hardware support for sync](#hardware-support-for-sync)
+      - [Memory barriers](#memory-barriers)
+      - [Hardware instructions](#hardware-instructions)
+      - [Atomic variables](#atomic-variables)
+    - [Mutex locks](#mutex-locks)
+      - [Spinlock](#spinlock)
+    - [Semaphores](#semaphores)
+    - [Monitors](#monitors)
+    - [Liveness](#liveness)
+      - [Priority inversion](#priority-inversion)
+    - [Evaluation](#evaluation)
+  - [Chapter 7 - Sync Examples](#chapter-7---sync-examples)
+
+Notacion:
+
+- (!): Se nombra en el summary (por lo tanto es un punto importante del chapter)
 
 # Part one - Overview
 
@@ -1173,3 +1263,411 @@ Primero se define un criterio para seleccionar un algoritmo.
   programarlo y probarlo en un sistema real.
 
 # Part three - Process Synchronization
+
+Usar herramientas que controlan el acceso a datos compartidos para evitar *race
+conditions*.
+
+## Chapter 6 - Sync tools
+
+Un **cooperating process** puede afectar o ser afectado por otros procesos
+ejecutando en el sistema. Pueden compartir directamente un espacio de
+direcciones logico (codigo y data) o requerir el uso de shared memory / message
+passing.
+
+Objetivos
+
+- Describir el problema de critical section e ilustrar race condition
+- Soluciones de hardware para crit. Mem barries, CAS, atomic vars.
+- Mutex, semaphores, monitores, condition variables para CRIT
+- Evaluar herramientas que lo solucionan en diferentes niveles de contencion.
+
+### Background
+
+Los procesos pueden correr en paralelo y sus instrucciones pueden tener
+cualquier interleaving, dependiendo del scheduler.
+
+(!) Una **race condition** sucede cuando hay muchos procesos ejecutando
+concurrentemente y tienen acceso a data compartida, y el resultado final depende
+del orden particular en el cual suceden los accesos concurrentes a la data.
+Estas pueden resultar en valores corrompidos en la data compartida. Para
+evitarlo, tienen que estar *sincronizados* de alguna forma.
+
+> Por ejemplo, dos programas ejecutando `n++` el resultado deberia ser siempre
+> n+2. La operacion se podría implementar en algun lenguaje de maquina como
+>
+> ```asm
+> r1 = n
+> r1 = r1 + 1
+> n = r1
+> ```
+>
+> Un interleaving posible seria
+>
+> - [p1] r1 = n
+> - [p1] r1++
+> - [p2] r2 = n
+> - [p2] r2++
+> - [p1] n = r1
+> - [p2] n = r2
+>
+> Donde el valor final es `n + 1`.
+
+### The Critical-Section Problem
+
+(!) En un sistema con n procesos, cada uno tiene un cacho de codigo llamado
+**sección crítica**, en el cual accede y actualiza informacion compartida con al
+menos otro proceso. No deberia haber dos procesos ejecutando en sus secciones
+criticas a la vez. El *critical-section problem* es diseñar un protocolo que
+usen los procesos para sincronizar su actividad para que esto suceda.
+
+La **entry section** es la que hace el *request* de entrar y la **exit section**
+la de salir. El resto es **remainder section**. La estructura general de un
+proceso típico es
+
+```c
+while(true) {
+  entry section
+
+    critical section
+
+  exit section
+
+    remainder section
+}
+```
+
+(!) Una solución al problema debe cumplir con:
+
+1. **Mutual exclusion**: A lo sumo un proceso esta en la seccion critica.
+2. **Progress**: Si no hay ninguno en ella y algunos quieren entrar, solo los
+   que no esten en REM peuden participar en la decision de cual entra, y no
+   puede ser pospuesto indefinidamente.
+
+   Los programas cooperan para determinar que proceso va a entrar a la seccion
+   critica.
+
+3. **Bounded waiting**: Hay un limite para la cantidad de veces que otros
+   procesos pueden entrar a la seccion critica desde que uno pidio entrar, antes
+   de que se lo deje entrar.
+
+   Limita la cantidad de tiempo un programa puede esperar hasta entrar a la
+   seccion critica.
+
+Hay dos acercamientos generales para manejar critical sections en SOs:
+
+- **Preemptive kernels**: Deja que los procesos sean preempted mientras corre en
+  modo kernel. No esta libre de race conditions.
+- **Nonpreemptive kernels**: No deja. Un proceso en kernel mode va a correr
+  hasta que sale, se bloquea, o le da control al CPU. Esta libre de race
+  conditions en las estructuras de datos del kernel, ya que hay uno a la vez.
+
+  Es dificil de implementar en arquitecturas SMP, ya que puede haber mas de un
+  proceso corriendo en cada core.
+
+#### Peterson's solution
+
+Es una software-based (porque no requiere soporte especial del hardware o SO)
+solution que permite que dos procesos (Pi y Pj) se turnen para entrar a su
+seccion critica.
+
+```c
+int turn;     // shared
+bool flag[2]; // shared
+
+// codigo de Pi
+while(true) {
+  flag[i] = true;
+  turn = j;
+  while (flag[j] && turn == j); // entry
+
+    // crit
+  
+  flag[i] = false; // exit
+
+  // remainder
+}
+```
+
+Cumple con las 3 propiedades (demo en el libro), pero (!) **no necesariamente
+anda en arquitecturas modernas** porque el compilador o el procesador pueden
+reordenar instrucciones que no tienen dependencias para mejorar la eficiencia,
+lo cual no tendria efecto en programas singlethreaded pero si en estas
+situaciones.
+
+### Hardware support for sync
+
+Como las software-based solutions no esta garantizado que andan en arquitecturas
+modernas, hay que brindar algo de soporte desde el HW.
+
+(!) Incluyen
+
+- Memory barriers
+- Instrucciones de hardware (CAS, TAS)
+- Atomic variables
+
+#### Memory barriers
+
+La manera en la cual una arquitectura determina que garantias de memoria le
+provee a una aplicacion es su **memory model**, que puede ser de dos categorias:
+
+- **Strongly ordered**: modificaciones a memoria en un procesador es
+  inmediatamente visible a todos los demas.
+
+- **Weakly ordered**: modificaciones a memoria en un procesador pueden no ser
+  inmediatamente visibles a los demas.
+
+Varian segun el procesador, entonces desde el kernel no se puede asumir nada.
+Pero si brindan instrucciones que fuerzan que los cambios sean propagados al
+resto de los procesadores. Se llaman **memory barriers** o **memory fences**.
+Cuando se ejecutan, el sistema asegura que se terminen de ejecutar todos los
+loads / stores antes de que ejecuten mas.
+
+Son muy low-level y solo se usan a veces en el kernel.
+
+#### Hardware instructions
+
+Instrucciones de hardware especiales que permiten ver el valor y modificar el
+contenido de una word o swappear los de dos words de manera **atomica** (como
+una unidad indivisible / ininterrumpible). Esto se puede usar para solucionar
+critical-section.
+
+Los conceptos principales atras de las instrucciones son los de las funciones
+`test_and_set()` y `compare_and_swap()`. Ambas se ejecutan *atomicamente*, si se
+ejecutasen dos a la vez, (una en cada core) se ejecutarian secuencialmente en
+algun orden arbitrario.
+
+```c
+// Ejecutadas atomicamente
+bool test_and_set(bool *target) {
+  bool rv = *target;
+  *target = true;
+
+  return rv;
+}
+
+int compare_and_swap(int* value, int expected, int new) {
+  int prev = *value;
+  if (*value == expected) *value = new;
+
+  return prev;
+}
+```
+
+Se puede usar para solucionar critical section de la siguiente manera
+
+```c
+boolean lock; // shared
+
+// Con test_and_set
+do {
+  while (test_and_set(&lock)); // entry
+
+  // critical section
+
+  lock = false; // exit
+
+  // remainder
+} while(true);
+
+// Con compare_and_swap
+while (true) {
+  while (compare_and_swap(&lock, 0, 1) != 0); // entry
+
+  // critical section
+
+  lock = 0; // exit
+
+  // remainder
+}
+```
+
+Estas soluciones solucionan el problema, pero no cumplen con *bounded waiting*.
+Se puede modificar para que si, ver libro.
+
+#### Atomic variables
+
+Por lo general `compare_and_swap` no se usa directamente para la exclusion
+mutua, sino para construir otras herramientas de mal alto nivel. Por ejemplo,
+las **variables atomicas** que proveen operaciones atomicas en tipos de datos
+basicos.
+
+Por ejemplo, para implementar `increment` con CAS
+
+```c
+void increment(atomic_int *v) {
+  int tmp;
+  do {
+    tmp = *v;
+  } while (tmp != compare_and_swap(v, tmp, tmp+1));
+}
+```
+
+Se suelen usar en SOs y aplicaciones, pero por lo general solo para updates de
+secuencias.
+
+### Mutex locks
+
+Las soluciones hardware-based son demasiado bajo nivel para los programadores de
+aplicaciones. diseñadores de SOs brindan abstracciones de mas alto nivel para
+solucionar el critical-section problem.
+
+(!) El mas simple es el **mutex lock** (mutuex es short para mutual exclusion),
+que provee exclusión mútua requiriendo que un proceso tenga que adquirir
+(`acquire()`) el lock antes de entrar a la seccion critica y liberarlo
+(`release()`) para salir.
+
+```c
+while (true) {
+  acquire lock
+
+    critical section
+  
+  release lock
+
+    remainder section
+}
+```
+
+Para implementarlo, ambos llamados deben ser atomicos.
+
+#### Spinlock
+
+Un mutex implementado con busy-waiting, por ejemplo con CAS. ("spinlock" porque
+el processo "spins" mientras espera a que el lock se libere.)
+
+Tiene la desventaja de que desperdicia tiempo de CPU con busy waiting, pero la
+ventaja de que no requiere context-switch esperar un lock. Por lo general
+conviene usarlo cuando se va a mantener por poco tiempo.
+
+### Semaphores
+
+(!) Un **semaphore** es una herramienta de sync que puede usar para proveer
+exclusion mutua. Es un entero que se accede solo mediante dos operaciones
+atomicas:
+
+- `wait()`
+  
+  ```c
+  // opcion 1 con busy waiting, definicion clasica
+  wait(S) {
+    while (S <= 0); // busy wait
+    S--;
+  }
+
+  // opcion 2 con queue
+  // se invierte el orden del decrement and test, asi permitiendo que el valor
+  // del semaforo sea negativo y represente la cantidad que estan esperando
+  wait(S) {
+    S.val--;
+    if (S.val < 0) {
+      sleep()
+      S.waiting.push(this)
+    }
+
+  }
+  ```
+
+- `signal()`
+
+  ```c
+  // opcion 1 con busy waiting
+  signal(S) { S++; }
+
+  // opcion 2 con queue
+  signal(S) {
+    S.val++;
+    if (S.val <= 0) {
+      wakeup(S.waiting.pop())
+    }
+  }
+  ```
+
+En la practica se distingue entre un **counting semaphore** que tiene valores
+arbitrarios, y un **binary semaphore** que puede tener solo 0 o 1 (practicamente
+un mutex).
+
+Un uso de counting semaphores es controlar acceso a un recurso con una cantida
+finita de instancias. Cuando un proceso hace `wait()` se decrementa y cuando
+hace `signal()` se incrementa, y al llegar a 0 se estan usando todos los
+recursos.
+
+### Monitors
+
+Los semaforos/mutex estan buenos pero le podes re pifiar usandolos. Una forma de
+evitarlo es proveer abstracciones de mas alto nivel, como **monitores**.
+
+(!) Los monitores son un TAD que provee una manera high-level de realiar sync.
+Encapsula data con un set de funciones. Se garantiza la exclusion de procesos
+dentro del monitor.
+
+![](img-silver/6-sync/monitor-schematic.png)
+
+Pero eso no es suficientemente potente para algunos esquemas de sync, entonces
+se agregan las **variables de condicion**, y los procesos pueden hacer `wait()`
+y `signal()` sobre *condiciones*. El `signal()`, a diferencia de los semaforos,
+no causa ningun efecto si no hay nadie esperando.
+
+![](img-silver/6-sync/monitor-cond.png)
+
+Si P hace `signal` y Q estaba esperando, hay dos posibilides de implementacion
+
+- **signal and wait**: P espera a que Q salga del monitor o espera otra
+  condicion.
+- **signal and continue**: Q espera a que P salga o espera a una condicion
+- mix: Cuando P hace signal() automaticamente sale del monitor.
+
+### Liveness
+
+Usar sync para solucionar el critical-section problem puede causar que un
+proceso espere infinitamente para entrar a ella. **Liveness** es un set de
+propiedades que un sistema debe cumplir para asegurar que los procesos hacen
+*progreso* durante su ciclo de ejecucion.
+
+Cuando un proceso se queda esperando indefinidamente, se llama un *liveness
+failure*.
+
+Un problema de liveness posible es **deadlock**, en el cual dos procesos esperan
+indefinidamente por un evento que solo el otro puede causar. Estos estan
+**deadlocked**.
+
+#### Priority inversion
+
+Si un proceso de prioridad baja tiene un recurso que uno de prioridad alta
+necesita, podria pasar que el de baja prioridad sea preempted por uno de
+prioridad media, causando que el de alta tenga que esperar mas.
+
+> Por ej. procesos L, M, H con prioridades L < M < H.
+> Si L tiene el semaforo S que requiere H, H tiene que esperar a que L lo
+> libere. Pero si justo entra M, L es preempted y asi H tiene que esperar a que
+> un proceso de prioridad menor que el termine para ejecutar.
+
+Este problema de liveness se conoce como **priority inversion**. Para evitarlo
+se puede implementar un **priority-inheritance protocol**, en el cual todos los
+procesos que tengan un recurso que requiera otro de mayor prioridad heredan su
+prioridad hasta que lo liberen.
+
+> L heredaria la de H, asi no siendo preempted y luego ejecutaria H.
+
+### Evaluation
+
+Cuando usar cada herramienta de sync
+
+- Hardware: Low level, tipicamente se usan en las implementaciones de las demas
+- CAS: Construir **lock-free** algorithms que tienen proteccion contra
+  race-conditions sin el overhead de locking.
+
+  Se consideran approaches *optimistas*, primero modificas y despues te fijas
+  si alguien mas se habia metido en el medio. En caso de que si, repetis hasta
+  que sale bien.
+
+  Mutual exclusion locking es un approach *pesimista*, asume que otro thread
+  esta accediendo concurrentemente, entonces pesimistamente se adquiere el
+  lock antes de hacer cambios.
+
+  En diferentes niveles de contencion,
+
+  - **Uncontended**: CAS es mas rapido (aunque ambos serian rapidos)
+  - **Moderate contention**: CAS va a ser mas rapido
+  - **High contention**: sync tradicional va a ser mas rapido que CAS
+
+## Chapter 7 - Sync Examples
