@@ -98,6 +98,23 @@
       - [Transactional Memory](#transactional-memory)
       - [OpenMP](#openmp)
       - [Functional Programming Languages](#functional-programming-languages)
+  - [Chapter 8 - Deadlocks](#chapter-8---deadlocks)
+    - [System model](#system-model)
+    - [Deadlocks](#deadlocks)
+      - [Livelock](#livelock)
+    - [Deadlock characterization](#deadlock-characterization)
+      - [Condiciones necesarias](#condiciones-necesarias)
+      - [Resource-Allocation Graph](#resource-allocation-graph)
+    - [Handling Deadlocks](#handling-deadlocks)
+    - [Deadlock Prevention](#deadlock-prevention)
+    - [Deadlock Avoidance](#deadlock-avoidance)
+      - [Safe State](#safe-state)
+      - [Resource-Allocation Graph Algorithm](#resource-allocation-graph-algorithm)
+      - [Banker's algorithm](#bankers-algorithm)
+    - [Deadlock Detection](#deadlock-detection)
+    - [Deadlock Recovery](#deadlock-recovery)
+- [Part four - Memory Management](#part-four---memory-management)
+  - [Chapter 9 - Main Memory](#chapter-9---main-memory)
 
 Notacion:
 
@@ -1796,7 +1813,7 @@ Cadtanto quieren comer pero para eso necesitan tomar ambos palillos (los mas
 cercanos), pero pueden levantar de a uno a la vez, y no se los pueden sacar.
 Cuando tienen ambos, comen. Cuando terminan, los largan y piensan.
 
-![](img-silver/6-sync/dining-philosophers.png)
+![](img-silver/7-sync-problems/dining-philosophers.png)
 
 - Semaphores
 
@@ -1937,3 +1954,311 @@ Son directivas de compilador para denotar regiones criticas / paralelizables.
 #### Functional Programming Languages
 
 Como no hay estado ni mutabilidad, no hay race conditions.
+
+## Chapter 8 - Deadlocks
+
+Un **deadlock** es una forma de *liveness failure* en la que todos los procesos
+de un conjunto estan esperando un evento que puede ser causado solo por otro del
+mismo conjunto.
+
+Objetivos
+
+- Ilustrar como pasa un deadlock
+- Definir condiciones necesarias para caracterizarlo
+- Identificarlo con un resource allocation graph
+- Evaluar 4 approaches para prevenir
+- Bankers algorithm
+- Deadlock detection algorithm
+- Evaluar approaches para recuperarse de un deadlock
+
+Notas (azules)
+
+- `lockdep`: Programa para detectar deadlocks en el kernel de linux
+- En las bases de datos transaccionales, las transacciones deben ser atomicas y
+  por eso se suelen usar locks. Por lo tanto, pueden haber deadlocks. Para
+  manejarlos, periodicamente se corre un deadlock detection y como recovery se
+  mata una transaccion que este deadlocked.
+
+### System model
+
+Un sistema es un conjunto finito de recursos distribuido en threads que compiten
+por ellos. Pueden particionarse en clases de equivalencia. Si un thread requiere
+un recurso de una clase, *cualquier* instancia deberia poder satisfacer el
+request.
+
+Un thread puede usar un recurso de las siguientes maneras
+
+1. **Request** the resource. Si no puede ser fulfilled, espera hasta que puede
+2. **Use**: opera el recurso.
+3. **Release**: libera el recurso.
+
+Un conjunto de threads esta **deadlocked** cuando todos estan esperando por un
+evento que causa otro del set (request y release).
+
+### Deadlocks
+
+Ejemplo
+
+```c
+mutex first;
+mutex second;
+
+/* thread 1 */
+first.lock()
+second.lock()
+
+// do work
+
+second.unlock()
+first.unlock()
+
+/* thread 2 */
+second.lock()
+first.lock()
+
+// do work
+
+first.unlock()
+second.unlock()
+```
+
+Sucede un deadlock si thread 1 adquiere `first` mientras que el thread 2
+`second`.
+
+#### Livelock
+
+**livelock** es otra forma de *liveness failure*. Ocurre cuando un thread
+intenta de hacer algo y falla reiteradamente.
+
+> Por ejemplo, si dos personas se quieren pasar en un pasillo y se van moviendo
+> para el costado en la misma direccion. Si bien no estan bloqueados, ninguno de
+> los dos hace progreso.
+
+Tipicamente ocurre cuando los threads reintentan operaciones fallidas al mismo
+tiempo. Para evitarlo, se puede reintentar en momentos random
+
+> Esto es lo que hace Ethernet cuando hay una colision de red.
+
+### Deadlock characterization
+
+#### Condiciones necesarias
+
+Solo puede haber deadlock si se dan las siguientes 4 condiciones en simultaneo
+
+1. **Exclusion mutua**: Al menos un recurso debe estar adquirido sin ser
+   compartipor los demas. Solo un thread puede usarlo a la vez. Si otro thread
+   lo requiere, se queda esperando hasta que se haya liberado.
+2. **Hold and wait**: Un thread debe tener adquirido al menos un recurso y
+   esperando por recursos adicionales adquiridos por otros threads.
+3. **No preemption**: Los recursos no pueden ser preempted, solo se puede
+   liberar voluntariamente por el thread que lo adquirio.
+4. **Circular wait**: Existe un conjunto de threads T0, ..., Tn tal que Ti
+   espera un recurso adquirido por T{i+1 % n} (circularmente, i.e Tn de T0)
+
+Obs: 4 => 2
+
+#### Resource-Allocation Graph
+
+Los deadlocks se pueden describir de una manera mas precisa mediante un digrafo
+llamado **system resource-allocation graph** (RAG).
+
+- $V = {T_1, ..., T_n} \cup {R_1, ..., R_m}$
+  - $T_i$: threads
+  - $R_j$: **tipos** de recursos (con circulitos adentro para representar
+    instancias)
+- E
+  - **request edge**: $T_i \rightarrow R_j$ si $T_i$ hizo request de una
+    instancia de $R_j$, y esta esperando por ella.
+  - **assignment edge**: $R_j \rightarrow T_i$ si una instancia de $R_j$ fue
+    asignada a $T_i$
+
+> RAG del ejemplo de deadlock
+>
+> ![](img-silver/8-deadlock/resource-alloc-graph.png)
+
+Cuando un thread pide un recurso, se hace un request edge. Cuando se le es
+otorgado, se convierte en un assignment edge. Cuando ya no lo necesita, se
+elimina.
+
+Si el grafo no tiene ciclos, entonces no hay deadlock. Pero si hay un ciclo,
+*podria* existir. Si cada tipo de recurso del ciclo tiene exactamente una
+instancia, entonces seguro hay un deadlock. En este caso, es una condicion
+no solo necesaria, sino suficiente.
+
+- Ejemplo de RAG con ciclo y deadlock
+
+  ![](img-silver/8-deadlock/rag-deadlock.png)
+
+- Ejemplo de RAG con ciclo y **sin** deadlock
+
+  ![](img-silver/8-deadlock/rag-no-deadlock.png)
+
+### Handling Deadlocks
+
+Se puede lidiar de 3 maneras
+
+1. Ignorar el problema y suponer que no pasan. Este es el approach que toman
+  mucho SOs modernos como Linux y Windows.
+
+2. Usar un protocolo para prevenir (*prevent* o *avoid*) deadlocks, asegurando
+  que nunca entre en un estado de deadlock.
+
+   - **Deadlock Prevention** provee metodos para asegurar que al menos una
+    condicion necesaria no se cumpla. Previenen deadlocks restringiendo como se
+    hacen los requests a recursos.
+
+   - **Deadlock avoidance**: Requiere que el SO tenga info adicional por
+    adelantado para saber que recursos va a solicitar un thread. De esa forma,
+    puede postergar hacerlo esperar si resultaria en un deadlock.
+
+3. Dejar que entre en un estado de deadlock, detectarlo, y recuperarse.
+
+### Deadlock Prevention
+
+Asegurando que al menos una de las condiciones necesarias no se cumpla,
+*prevenimos* que ocurran.
+
+- Mutual exclusion: En general no se puede evitar porque algunos recursos son
+  intrinsicamente no compartibles, como un mutex.
+- Hold and wait: No se puede en la practica.
+- No Preemption: No se puede aplicar en general.
+- Circular Wait: Se impone un orden total sobre los recursos, y se requiere que
+  se adquieran en orden creciente. **Es el unico que se puede hacer en la
+  practica**
+
+Tiene de posible side effect baja utilizacion de dispositivos y throughput
+reducido del sistema.
+
+### Deadlock Avoidance
+
+Requerir info adicional sobre como se van a solicitar los recursos. Sabiendo la
+secuencia commpleta de requests y releases de cada thread, el sistema puede
+deciri si hacer esperar o no a un thread para evitar un posible deadlock en el
+futuro.
+
+Los modelos requieren que cada thread declare el *maximo* numero de recursos de
+cada tipo que puede llegar a necesitar.
+
+El resource allocation *state* esta definido por el numero de recursos asignados
+y libres, y la demanda maxima de cada thread.
+
+#### Safe State
+
+Un estado es *seguro* si el sistema puede asignar recursos a cada thread (hasta
+su maximo) en algun order y evitar un deadlock.
+
+Formalmente, un sistema esta en un estado seguro solo si existe una **safe
+sequence**: una secuencia de threads $<T_1, ... T_n>$ tq para cada $T_i$ los
+requests que puede seguir haciendo se pueden satisfacer por los libres + los
+asignados a $T_j$ con $j < i$. En esta situacion, si no estan inmediatamente
+libres, $T_i$ puede esperar hasta que terminen los $T_j$. Cuando terminen, $T_i$
+puede obtener sus recursos y terminar, y luego podra $T_{i+1}$, y asi.
+
+Si no existe esa secuencia, se dice que esta en un estado *inseguro*, pero no
+todos los estados unsafe llevan a deadlock.
+
+![](img-silver/8-deadlock/state-spaces.png)
+
+> Por ejemplo, en un sistema con 12 recursos de un solo tipo y tres threads
+>
+> | Thread | Maximum Needs | Current needs |
+> | ------ | ------------- | ------------- |
+> | $T_0$  | 10            | 5             |
+> | $T_1$  | 4             | 2             |
+> | $T_2$  | 9             | 2             |
+>
+> En el momento $t_0$, el sistema esta en un safe state. La secuencia $<T_1,
+> T_0, T_2>$ satisface la condicion de safety.
+
+Dada esta definicion, se pueden definir estrategias para evitar que el sistema
+salga del estado safe. Como un proceso puede tener que esperar incluso con los
+recursos libres, su utilizacion puede llegar a ser menor.
+
+#### Resource-Allocation Graph Algorithm
+
+Si hay solo una instancia de cada tipo de recurso, podemos usar el si y solo si
+de los ciclos del RAG. Se introduce un **claim edge** $T_i \rightarrow R_j$ si
+$T_i$ puede requerir el recurso en el futuro.
+
+Si se formarian ciclos, hacemos que el thread espere.
+
+![](img-silver/8-deadlock/rag-avoidance.png)
+![](img-silver/8-deadlock/rag-unsafe.png)
+
+#### Banker's algorithm
+
+El RAG no es aplicable cuando hay mas de una instancia de cada tipo de recurso.
+El bankers si, pero es menos eficiente. n = threads, m = recursos
+
+Estructuras de datos:
+
+- Available: Vector con si cada recurso esta available
+- Max: Matriz con la maxima demanda de cada thread por recurso
+- Allocation: Matriz con los recursos asignados a cada thread
+- Need: Matrix con la demanda restante de cada thread. Need[i][j] = Max[i][j] -
+  Allocation[i][j]
+
+Sobre esto se pueden hacer algoritmos para ver que
+
+- El sistema esta en un estado seguro ($O(n^2 \times m)$)
+- Determinar si un request puede hacerse de forma segura
+
+### Deadlock Detection
+
+Si el sistema no provee medidas para prevenirlo, puede suceder un deadlock. En
+esta situacion, puede
+
+- Un algoritmo que examine el estado del sistema para ver si paso un deadlock
+- Un algoritmo para recuperarse del deadlock
+
+Algoritmos segun instancias de recursos:
+
+- Single instance
+
+  Se hace una variante del RAG, un **wait-for graph** en la cual se sacan los
+  nodos de recursos y se colapsan los arcos correspondientes. Un sistema tiene
+  deadlock si y solo si el wait-for graph tiene ciclos.
+
+  ![](img-silver/8-deadlock/wait-for-graph.png)
+
+- Multiple instance
+
+  No sirve el wait-for graph porque no es un si y solo si. Se usan estructuras
+  similares al del Banker's algorithm y un algoritmo sobre ellas.
+
+Y cuando corremos el algoritmo? Factores
+
+1. Que tan *seguido* ocurren los deadlocks?
+2. Que *tantos* threads son afectados por el?
+
+### Deadlock Recovery
+
+Cuando un algoritmo de deteccion determina que hay un deadlock, hay que
+hacer algo. Se puede informar a un operador para que lo solucione a manopla, o
+se puede hacer un **recovery** automatico, de dos maneras:
+
+- Abortar uno o mas threads para romper con el circular wait.
+
+  Abortar a un proceso no es trivial porque pueden llegar a dejar recursos
+  (files abiertos, mutex, etc.) en estados inconsistentes.
+
+  - Abortar *todos* los deadlocked threads, pero puede llegar a requerir
+   overhead en que lleguen al estado que estaban devuelta
+  - Abortar de a uno hasta que se rompa el ciclo, pero hay que correr el
+   algoritmo despues de cada uno (overhead).
+  - Hay que tener policies para decidir a cuales ir sacando. Estas suelen
+     minimizar el *costo*, segun algun criterio
+
+- Preempt algunos recursos de uno o mas de los deadlocked threads. Hay que tener
+  en cuenta varios aspectos
+  - Seleccionar la victima: el recurso a sacar, tambien policies
+  - Rollback: Tirar el proceso atras a un estado seguro porque ya no tiene el
+    recurso. Como es dificil determinar precisamente cuando, lo mas simple es un
+    *total rollback*: abortar y restartear el proceso.
+  - Starvation: Como garantizar que no se le saque siempre el mismo recurso al
+    mismo proceso, lo cual llevaria a su starvation. Una forma es agregar el
+    numero de rollbacks en el *cost*.
+
+# Part four - Memory Management
+
+## Chapter 9 - Main Memory
