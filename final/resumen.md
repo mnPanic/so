@@ -43,6 +43,9 @@
       - [Propiedades](#propiedades)
     - [Livelock](#livelock)
     - [Problemas clasicos](#problemas-clasicos)
+    - [Jerarquia de objetos atomicos](#jerarquia-de-objetos-atomicos)
+      - [Registros RW](#registros-rw)
+      - [Problema del consenso](#problema-del-consenso)
 
 ## Bibliografia
 
@@ -793,3 +796,98 @@ Ej: queda poco espacio en disco. Proceso A detecta y notifica a proceso B
 hace que lo detecte A... y asi.
 
 ### Problemas clasicos
+
+Leer de teo
+
+- Readers / writers
+- Filosofos que cenan
+- Barbero
+
+### Jerarquia de objetos atomicos
+
+Se puede lograr exclusion mutua sin TestAndSet?
+
+#### Registros RW
+
+Un registro basico **read-write register** puede ser single/multi (i.e
+single-reader, single-writer, etc.)
+
+- Si `read()` y `write()` no se solapan, `read()` devuelve el **ultimo** valor
+  escrito.
+
+- Si se solapan,
+  - *safe*: `read` devuelve **cualquier** valor
+  - *regular*: `read` devuelve **algun** valor escrito
+  - *atomic*: `read` devuelve un valor **consistente** con una serializacion.
+
+![](img/sync/rw-reg.png)
+
+Ejemplos de EXCL con registros RW
+
+- Dijkstra
+- Panaderia de Lamport
+- Algoritmo de Fischer
+
+**Teorema (Burns & Lynch)**: No se puede garantizar EXCL y LOCK-FREEDOM con
+menos de n registros RW.
+
+#### Problema del consenso
+
+Es una forma de medir que tan buenos son los objetos atomicos. Una formalización
+de la pregunta "pueden n procesos (concurrentes) acordar sobre un estado
+booleano?"
+
+- Dados
+  - Valores: V = {0, 1}
+  - Inicio: Todo proceso i empieza con init(i) en V
+  - Decision: Todo proceso i decide un valor decide(i) en V
+- El problema de consenso requiere
+  - Acuerdo: Para todo i != j, decide(i) = decide(j)
+  - Validez: Existe i tal que init(i) = decide(i)
+  - Terminacion: Todo i decide en un numero finito de transiciones (WAIT-FREEDOM)
+
+**Teorema (Herelihy, Lynch)**: No se puede garantizar consenso para un n
+arbitrario con registros RW atómicos.
+
+**Consensus number**: Cantidad de procesos para los cuales se resuelve consenso.
+Sirve para definir una jerarquía de los mecanísmos de sync (Herlihy)
+
+- Registros RW atomicos: 1
+- Colas, pilas = 1
+- (TAS) getAndSet = 2
+- CompareAndSwap/CompareAndSet = consensus number infinito
+
+  ```cpp
+  atomic T compareAndSwap(T registro, T esperado, T nuevo) {
+    T actual = registro;
+    if (actual == esperado) registro = nuevo;
+    return actual;
+  }
+
+  atomic bool compareAndSet(T registro, T esperado, T nuevo) {
+    if (registro == esperado) {
+      registro = nuevo;
+      return true
+    }
+
+    return false;
+  }
+  ```
+
+  ```cpp
+  // El que lee -1 con el CAS (i.e el primero que lo llega a ejecutar,
+  // ya que es atomico) pasa a ser el decisor.
+  atomic<int> decisor = -1;
+  T[] proposed
+
+  T decide(int i) {
+    proposed[i] = init(i);
+
+    if (decisor.compareAndSet(-1, i))
+      // Soy el decisor
+      return proposed[i];
+
+    // No soy el decisor, decido lo que decidio el.
+    return proposed[decisor.get()];
+  }
+  ```
