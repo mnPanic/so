@@ -39,7 +39,7 @@ proceso usaba direcciones físicas, se rompe todo.
 Se usa un registro de base, y todas las direcciones se toman como relativas
 a esa base.
 
-Pero como aseguuramos que cada proceso acceda solo a su memoria?
+Pero como aseguramos que cada proceso acceda solo a su memoria?
 
 - **Reubicación**: Cambios de contexto / swapping
 - **Protección**: Memoria privada de los procesos.

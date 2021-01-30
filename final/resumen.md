@@ -46,6 +46,19 @@
     - [Jerarquia de objetos atomicos](#jerarquia-de-objetos-atomicos)
       - [Registros RW](#registros-rw)
       - [Problema del consenso](#problema-del-consenso)
+  - [5 - Memoria](#5---memoria)
+    - [Fragmentacion](#fragmentacion)
+    - [Organización de la memoria](#organización-de-la-memoria)
+    - [Políticas de asignación](#políticas-de-asignación)
+    - [Memoria virtual](#memoria-virtual)
+      - [Paginas](#paginas)
+      - [MMU](#mmu)
+      - [Reemplazo de paginas](#reemplazo-de-paginas)
+      - [Page Fault](#page-fault)
+    - [Thrashing](#thrashing)
+    - [Protección y reubicación](#protección-y-reubicación)
+    - [Segmentacion](#segmentacion)
+    - [Copy-on-write](#copy-on-write)
 
 ## Bibliografia
 
@@ -891,3 +904,227 @@ Sirve para definir una jerarquía de los mecanísmos de sync (Herlihy)
     return proposed[decisor.get()];
   }
   ```
+
+## 5 - Memoria
+
+La memoria tambien se comparte. El sustistema **manejador de memoria** se
+encarga de
+
+- Manejar el espacio libre / ocupado
+- Asignar y liberar memoria
+- Controlar el swapping (cuando los procesos van y vienen de disco)
+
+Si tenemos un proceso en memoria, no hace falta compartir nada. Pero con
+*multiprogramacion*, si cuando ese se bloquea queremos ejecutar otro, que
+hacemos con esa memoria? Eventualmente no alcanza toda y tenemos que hacer
+*swapping* a disco. Pero el problema es que es lento, entonces uno intenta de
+hacerlo lo minimo posible y aprovechar la memoria.
+
+Problemas:
+
+- **Reubicacion** (cambio de contexto, swapping)
+- **Proteccion** (memoria privada de los procesos)
+- **Manejo del espacio libre** (evitando *fragmentacion*)
+
+### Fragmentacion
+
+> Había una cantidad de espacio libre para meter un auto más, pero partido
+> en pedazos tan chiquitos que no entraba a fines prácticos.
+> La calle estaría **fragmentada**
+
+La fragmentación es cuando tenemos suficiente memoria para atender una
+solicitud, pero no es continua. Si no se soluciona, el problema se hace
+arbitrariamente grande.
+
+Cada tanto se podria parar todo y compactar la memoria, pero seria muy costoso e
+imposible en sistemas real time. La idea entonces es *evitarla*.
+
+### Organización de la memoria
+
+- **Segmentos**
+  - Stack: crece hacia abajo
+  - Heap: crece hacia arriba
+- **Bitmap**
+  - Dividir la memoria en bloques de igual tamaño, y cada pocision del beatmap
+    representa un bloque. 0 si esta libre y 1 ocupado.
+  - Asignar y liberar O(1) pero buscar un bloque libre es O(n)
+  - No es muy usado
+- !! **Lista enlazada**
+  - Cada nodo representa un bloque libre o proceso que tiene asignado.
+  - Liberar es O(1) y asignar similar una vez que decidis donde.
+
+![](img/mem/bitmap-linked-list.png)
+
+### Políticas de asignación
+
+Donde asignar:
+
+- **First fit**: Asigno en el primer bloque donde entra.
+  - Rapido
+  - Tiende a fragmentar
+- **Best fit**: Me fijo donde entra mas justo
+  - Lento
+  - No es mejor, en la practica tiende a llenar la memoria de pequeños
+    bloquecitos.
+- **Quick fit**: Mantengo una lista de los bloques libres de los tamaños mas
+  frecuentemente solicitados.
+- **Buddy system**: Splitting de bloques.
+
+En la practica se usan esquemas mas complicados que conocen mas sobre la
+distribucion de pedidos, y realizan manejos mas sofisticados.
+
+Todos son muy ingenuos, y pueden producir fragmentación de distintos tipos
+
+- **Fragmentacion externa**: bloques libres pero chicos y dispersos) y otros
+- **Fragmentacion interna**: espacio desperdiciado dentro de los propios bloques, asignar bloques demasiado grandes.)
+
+### Memoria virtual
+
+Soluciona el problema de la reubicacion.
+
+Es la *virtualizacion del espacio de direcciones*, y requiere ayuda del HW con
+la MMU (Memory management unit)
+
+![](img/mem/mmu.png)
+
+- Sin memoria virtual
+  - El espacio de direcciones es el mismo que el tamaño de la memoria fisica
+  - Para obtener una celda,
+    - Pongo la dir en el bus de memoria
+    - Obtengo el contenido
+- Con memoria virtual,
+  - Espacio de direcciones: tamaño mem fisica + swap
+  - Los programas usan direcciones virtuales
+  - Para obtener una celda,
+    - Dir en el bus de memoria
+    - La MMU tradice virtual -> fisica
+    - La tabla de traduccion contiene el bit present, que indica si esta
+      cargado.
+    - Si no lo esta, lo cargo
+    - La dir fisica se pone en el bus
+    - Obtengo el contenido
+
+Permite direccionar un espacio mayor, y no hay problemas si al cargar devuelta
+un proceso queda con direcciones fisicas diferentes, porque las virtuales se
+mantienen.
+
+#### Paginas
+
+La memoria virtual esta dividida en *paginas*, bloques de memoria de tamaño
+fijo. Y el de memoria fisica esta dividida en bloques del mismo tamaño llamados
+*page frames*. La MMU entonces traduce paginas a frames, interpretando las
+direcciones virtuales como pagina + offset
+
+Cuando una pagina no esta en memoria, la MMU emite un Page Fault (#PF) que se
+atrapa por el SO, que **saca** alguna pagina de memoria y sube la
+correspondiente al disco. Cual sacar afecta al rendimiento (politica de
+remocion)
+
+![](img/mem/virtual-address-space.png)
+
+Puede haber páginas especiales de solo lectura o no swappeables (ya que no hay
+control de lo que pasa en el disco)
+
+#### MMU
+
+La MMU tiene una tabla de paginas usada para el mapeo. Esta es *multinivel*, los
+primeros bits llevan a cual tabla consultar. Esto es para evitar que sea
+demasiado grande.
+
+![](img/mem/multilevel-paging.png)
+
+Cada entry de la page table tiene
+
+- Page frame.
+- Bit present.
+- Bits de proteccion.
+- Bit de dirty (modificada desde que fue cargada a disco, si no lo fue, no hace
+  falta escribirla devuelta en el disco).
+- Bit de referenced: Si fue accedida desde que fue cargada a disco. Se usa para
+  ver cual bajar.
+- Y puede tener mas dependiendo de la arch.
+
+Como las tablas de paginas estan en memoria, el acceso a ellas es muy lento.
+Para remediarlo, se agrega un cache (la TLB, Translation Lookaside Buffer o
+*memoria asociativa*) que mapea de páginas a frames.
+
+#### Reemplazo de paginas
+
+Elegir las correctas afecta drasticamente el rendimiento
+
+Algoritmos:
+
+- FIFO
+- Second chance: Como FIFO, pero si la que voy a bajar tiene el bit de
+  referenced prendido, la considero como recien subida y bajo la siguiente.
+  Facil de implementar y mejor que FIFO
+- NRU (Not recently used): Se establece una prioridad para desalojar.
+  - No fueron referenciadas ni modificadas
+  - Fueron referenciadas pero no modificadas
+  - Modificadas
+- LRU (Least recently used): es el que suele funcionar mejor, pero es caro de
+  implementar. La que se uso menos recientemente tiene menos proba de volver a
+  ser usada en lo inmediato.
+
+Tambien hay variaciones que van al balance entre costo de implementacion y
+calidad de resultados, y a veces se combinan con carga de paginas por adelantado
+(en vez de esperar al PF)
+
+Los programas suelen exhibir *localidad de referencia*: acceden a direcciones
+que estan juntas entre si.
+
+#### Page Fault
+
+Que pasa con un PF?
+
+- Se emite la interrupcion (fault) PF, es atrapada por el kernel
+- Se hace un context switch
+- El kernel determina el tipo de la int y lo delega a la ISR correspondiente.
+- Averiguar que direccion virtual se queria
+- Se chequea que sea valida y que el proceso tenga los permisos. Sino, mata al
+  proceso (unix: Segmentation violation)
+- Se selecciona un page frame libre si lo hay, sino se libera mediante un
+  algoritmo de reemplazo.
+- Si la pagina tenia el bit *dirty*, hay que bajarla a memoria. Se marca como
+  *busy* para evitar que se use, mientras se pone a dormir.
+- Cuando el SO es notificado que termino de bajar la pagina disco, sube la otra
+  y duerme devuelta.
+- Cuando llega la interrupcion que indica que eso termino, actualiza la tabla de
+  paginas indicando que esta cargada
+- La instruccion que causo el page fault retoma, y cuando se reintente la pagina
+  va a estar en memoria
+
+### Thrashing
+
+**Thrashing** sucede cuando no hay mucha memoria, y hay mucha competencia entre
+los procesos para usarla. El SO esta constantemente cambiando paginas de memoria
+a disco ida y vuelta.
+
+### Protección y reubicación
+
+Para la proteccion, cada proceso tiene su propia tabla de paginas, pero no
+hay forma de acceder a la de otro. Esto se puede solucionar con
+**segmentacion**, haciendo que cada proceso tenga su propio espacio de memoria.
+
+### Segmentacion
+
+Los segmentos no son de tamaño fijo, pero tenemos los mismos problemas de
+swapping y fragmentacion. Lo mas comun es combinar segmentacion con paginado.
+
+> En diapo 35 ejemplo de intel
+
+Comparacion con paginacion
+
+- Las paginas son invisibles para el programador (en asm) pero los segmentos no
+- Los segmentos proveen mas de un espacio de direccionamiento que pueden estar
+  solapados.
+- Los segmentos facilitan la proteccion, a pesar de que tambien se pueda
+  implementar mediante paginados
+- La segmentacion brinda espacios de memoria separados al mismo proceso.
+
+### Copy-on-write
+
+Nuevos procesos se crean con `fork()`, pero no copiamos inmediatamente las
+paginas a memoria, sino que se hace **copy-on-write**: al principio referencia a
+las paginas del proceso padre, pero ni bien hace una escritura, antes de dejar
+que suceda las duplico.
