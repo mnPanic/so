@@ -115,6 +115,28 @@
     - [Deadlock Recovery](#deadlock-recovery)
 - [Part four - Memory Management](#part-four---memory-management)
   - [Chapter 9 - Main Memory](#chapter-9---main-memory)
+    - [Memory background](#memory-background)
+      - [Basic hardware](#basic-hardware)
+      - [Address binding](#address-binding)
+      - [Logical vs Physical address space](#logical-vs-physical-address-space)
+      - [Dynamic Loading](#dynamic-loading)
+      - [Dynamic Linking and Shared Libraries](#dynamic-linking-and-shared-libraries)
+    - [Contiguous Memory Allocation](#contiguous-memory-allocation)
+      - [Fragmentation](#fragmentation)
+    - [Paging](#paging)
+      - [Basic method](#basic-method)
+      - [Hardware support](#hardware-support)
+        - [TLB](#tlb)
+      - [Paging protection](#paging-protection)
+      - [Shared pages](#shared-pages)
+      - [Page table structure](#page-table-structure)
+        - [Hierarchical paging](#hierarchical-paging)
+        - [Hashed Page tables](#hashed-page-tables)
+        - [Inverted page tables](#inverted-page-tables)
+        - [Oracle SPARC Solaris](#oracle-sparc-solaris)
+    - [Swapping](#swapping)
+    - [Memory management examples](#memory-management-examples)
+  - [Chapter 10 - Virtual Memory](#chapter-10---virtual-memory)
 
 Notacion:
 
@@ -2262,3 +2284,313 @@ se puede hacer un **recovery** automatico, de dos maneras:
 # Part four - Memory Management
 
 ## Chapter 9 - Main Memory
+
+El proposito de una computadora es ejecutar programas, y estos junto con la data
+que acceden debe estar al menos parcialmente en memoria principal durante su
+ejecucion.
+
+En un sistema con multiprogramacion, como el CPU ejecuta mas de un proceso,
+estos deben compartir la memoria. En este capitulo se presentan diferentes
+approaches, y la seleccion del mejor suele depender del underlying hardware.
+
+Objetivos:
+
+- Diferencia entre logical y physical addresses, MMU
+- first-, best-, worst-fit
+- Internal vs external fragmentation
+- Logical to physical translation, TLB
+- Hierarchical paging, hashed paging, inverted page tables
+- IA-32, x86-64, ARMv8 archs
+
+### Memory background
+
+La memoria es central. Es un array de bytes, cada uno con su direccion.
+> En un instruction-execution cycle tipico, el CPU carga las instrucciones de
+> memoria (de donde apunte el PC), las decodea y fetchea operands de la memoria.
+> Luego de que ejecuta, el resultado tal vez se escriba a memoria.
+
+#### Basic hardware
+
+Como la CPU solo puede acceder a memoria principal y sus registros, cualquier
+dato que se quiera acceder de otros lugares (como el disco) debe ser movido ahi
+antes. Consdieraciones:
+
+- Velocidad: Los registros son de muy rapido acceso (1 clock), pero la memoria
+  principal no, ya que se accede mediante una transaccion en el bus de memoria.
+  Mientras tanto, se dice que el CPU esta **stalled**. Para remediarlo, se
+  agrega una cache en el medio.
+
+- Proteccion: Para que el sistema funcione correctamente, hay que proteger a los
+  procesos de los demas. Esto se suele hacer desde el hardware porque seria muy
+  costoso hacerlo desde el SO.
+
+  Cada proceso tiene un espacio de memoria diferente. Esto hace que no upedan
+  acceder a la memoria de los demas.
+
+  Para esto, es necesario poder determinar el *rango* de direcciones que cada
+  proceso puede acceder. Esto se hace con dos registros, un **base register**
+  con la primera posicion y un **limit register** con el tamaño del rango.
+  Estos registros solo se pueden cargar con instrucciones privilegiadas (que
+  solo se pueden ejecutar en modo kernel por el SO)
+
+  ![](img-silver/9-main-memory/base-limit.png)
+
+  Con esto, la proteccion se implementa comparando cada direccion que un
+  user-space process quiere acceder con los registros. Si esta fuera de su
+  rango, se hace un *trap*.
+
+  ![](img-silver/9-main-memory/protection-base-limit.png)
+
+  El SO puede acceder toda la memoria
+
+#### Address binding
+
+Usualmente un programa esta en el disco como un binario. Para correr, debe
+traerse a memoria y ponerse en el contexto de un proceso, quedando ready para
+ejecutar en el CPU. Mientras ejecuta, accede a memoria. El programa puede hacer
+referencia a direcciones de memoria, que dependiendo de la etapa en la que este
+pueden estar representadas de forma diferente.
+
+![](img-silver/9-main-memory/multistep-processing.png)
+
+Por lo general,
+
+- Las direcciones en el codigo fuente suelen ser *simbolicas* (como una variable
+  `count`)
+- El compilador **binds** las simbolicas a *relocatable addresses* (como "14
+  bytes desde el comienzo")
+- El linker o loader binds las relocatable addresses a absolutas (como 7083)
+
+Cada binding es un mapeo de un address space a otro. (!) El *binding* de
+direcciones puede ocurrir durante:
+
+- **Compile time**: Si se sabe precisamente en que posicion de memoria va
+  a ejecutar, se puede generar **absolute code**. Pero si cambia hay que
+  recompilar.
+- **Load time**: Si no se sabe en compile time a donde de memoria va a parar un
+  proceso, se tiene que generar **relocatable code**. El binding final se
+  pospone al momento de hacer el loading.
+- **Execution time**: Si el proceso se puede mover de segmento durante su
+  ejecucion, el binding se pospone a runtime. Es necesario hardware especial
+  (i.e paginacion), y la mayoria de los SOs usan este metodo.
+
+#### Logical vs Physical address space
+
+(!) Una direccion generada por la CPU se conoce como **logical address**, y la
+MMU (memory management unit) la traduce a una **physical address**.
+
+Si el binding se hace en compile o load time, entonces las direcciones fisicas y
+logicas son las mismas. Pero si se hace en runtime, se suele referir a las
+logicas como **virtual adresses**.
+
+![](img-silver/9-main-memory/mmu.png)
+
+El conjunto de direcciones fisicas se llama **physical address space** y el de
+las logicas **logical address space**
+
+#### Dynamic Loading
+
+Si un programa es muy grande, se ve limitado por el tamaño de la memoria fisica.
+Para evitar esto se puede usar **dynamic loading**, en el cual una rutina se
+carga dinamicamente a memoria solo cuando se necesita.
+
+#### Dynamic Linking and Shared Libraries
+
+Las **DLLs** (Dynamically linked libraries) son bibliotecas del sistema que se
+linkean a los programas de usuario en runtime, a diferencia de **static
+linking**, en la cual se cargan como si fueran objetos normales.
+
+Se pueden compartir entre muchos procesos, y por eso tambien se llaman **shared
+libraries**
+
+### Contiguous Memory Allocation
+
+(!) Una forma de asignar memoria es reservar particiones de cachos contiguos de
+memoria de tamaño variado.
+
+La memoria se divide en cachos usados por los procesos y *holes* no utilizados.
+Cuando un proceso se va a cargar a la CPU, es necesario asignarle un cacho de
+memoria, el cual puede no haber (en cuyo caso se puede rechazar el pedido con un
+error o ponerlo en una lista de espera). Esto es llamado **variable-partition
+scheme**
+
+![](img-silver/9-main-memory/variable-partition.png)
+
+El problema de satisfacer una peticion de tamaño n de una lista de agujeros
+libres es llamado **dynamic storage-allocation problem**, y hay tres estrategias
+comunmente usadas
+
+- **First fit**: Asignar el primer hole que tenga tamaño suficiente que sirva.
+  Generalmente mas rapido.
+- **Best fit**: Asignar el mas chico de los que tienen tamaño suficiente.
+- **Worst fit**: Asignar el mas grande. Peor que los otros dos.
+
+#### Fragmentation
+
+Hay dos tipos
+
+- **External fragmentation**: Hay suficiente espacio en memoria para satisfacer
+  una peticion, pero no es contiguo. La memoria esta fragmentada en una gran
+  cantidad de pequeños holes. First fit y best fit sufren de esto.
+
+  Una solucion posible es **compactar**, mover los bloques libres para que
+  queden en un solo bloque. Pero suele ser lento.
+
+  Otro approach es permitir que no sea contiguo el espacio de direcciones de un
+  proceso, que es lo que se hace en *paging*.
+
+- **Internal fragmentation**: Por lo general se asignan bloques de tamaño fijo
+  en vez de la cantidad exacta, para no tener que estar trackeando que pasa con
+  2 bytes. (ex. solicitud de 1020 cuando hay un hole de 1024). Pero con este
+  approach, el bloque asignado a un proceso puede ser mas grande que la memoria
+  solicitada. La diferencia entre ambos tamaños es la fragmentacion interna,
+  memorisin usar que es interna a una particion.
+
+### Paging
+
+**Paging** es un esquema de manejo de memoria que permite que el espacio de
+direcciones fisicas de un proceso sea no-contiguo. De esta forma, se evita la
+fragmentación externa. Pero no evita la fragmentación interna
+
+#### Basic method
+
+(!) La memoria fisica se divide en bloques de tamaño fijo llamados *page frames*
+y la memoria logica en bloques del mismo tamaño llamados *pages*.
+
+(!) Las direcciones logicas se dividen en dos: un numero de pagina (p) y un
+offset de pagina (d). El primero es un indice en una per-process **page table**
+que tiene una referencia a la frame en memoria fisica que tiene la pagina. El
+offset es la posicion dentro del frame.
+
+```text
+page number | page offset
+     p      |     d
+```
+
+![](img-silver/9-main-memory/page-table.png)
+
+![](img-silver/9-main-memory/paging-model.png)
+
+#### Hardware support
+
+En la PCB de los procesos hay un puntero a la page table. Esta se podria
+implementar con registros, pero por lo general son muy grandes las tablas,
+entonces almacenan en memoria y se acceden mediante un **PTBR** (Page table base
+register) que apunta a la base.
+
+##### TLB
+
+(!) Para evitar tener que acceder a memoria cada vez que se quiere traducir una
+direccion, se usa una cache, la **TLB** (Translation Look-Aside Buffer). Cada
+entry mapea un numero de pagina a un page frame.
+
+(!) Usarla en el proceso de traduccion de direcciones implica obtener el numero
+de pagina de la direccion logica, y chequear si el frame esta en la TLB. Si lo
+esta, se obtiene de la TLB (hit), y sino, se tiene que obtener de la page table.
+
+Tambien permiten entries fijas, como codigo muy usado de kernel.
+
+Algunas TLBs guardan en cada entry un ASIDs (address-space identifiers) que
+identifican a los procesos. En caso de que no, cuando hay un context switch hay
+que **flushearla** para evitar que un proceso acceda a una pagina que no es
+suya.
+
+![](img-silver/9-main-memory/tlb.png)
+
+#### Paging protection
+
+La proteccion de memoria en paging se hace mediante *protection bits* asociados
+a cada frame.
+
+#### Shared pages
+
+Se puede compartir codigo compartiendo paginas, por ej. en la que este cargada
+la libc. Tambien, para hacer IPC con shared memory algunos SOs usan shared
+pages.
+
+#### Page table structure
+
+##### Hierarchical paging
+
+Como los sistemas modernos soportan un address space grande (32 bit, $2^{32}$ o
+64 bit, $2^{64}$), el page table seria enorme.
+
+> Por ejemplo, en un sistema con un 32-bit address space, si el page size es 4KB
+> ($2^{12}$), la page table tendria 1 millon ($2^{20} = 2^{32} / 2^{12}$) de
+> entries. Si cada una pesa 4 bytes, cada proceso gasta 4MB para guardar la page
+> table.
+
+Una forma de evitar esto es dividir la page table en pedazos mas chicos.
+
+En 32 bits, se pueden usar dos niveles, la page table tambien esta paginada.
+
+![](img-silver/9-main-memory/two-level-page-table.png)
+
+Normalmente, una direccion logica se divide en un page number (20 bits) y un
+page offset (12 bits). Como paginamos la page table, el page number tambien se
+divide en 10 y 10
+
+```text
+page number | page offset
+  p1 | p2   |     d
+  10   10         12
+```
+
+Se traduce de la siguiente manera, y como funciona de "afuera para adentro"
+tambien se conoce como **forward-mapped** page table.
+![](img-silver/9-main-memory/two-level-translation.png)
+
+En 64 bit se tiene que usar mas niveles, porque sino siguen quedando grandes las
+outer pages. Ppero esto lleva a que requieran muchos accesos a memoria
+(demasiados) la traduccion
+
+##### Hashed Page tables
+
+**hashed page table** es un approach para hacer handling de address spaces mas
+grandes que 32 bits. El hash value es el numero de la pagina virtual.
+
+![](img-silver/9-main-memory/hashed-page-table.png)
+
+Para 64 bits se puede usar la variacion **clustered page tables**, en donde cada
+entry del mapa refiere a mas de una pagina en vez de una. Son utiles para
+*sparse* address spaces.
+
+##### Inverted page tables
+
+![](img-silver/9-main-memory/inverted-page-table.png)
+
+##### Oracle SPARC Solaris
+
+Ejemplo real, mas en el libro
+
+### Swapping
+
+(!) Consiste en **swappear** un proceso o parte de el a un **backing store** y
+despues traerlo a memoria devuelta para que continue la ejecucion. Esto permite
+que el espacio fisico total usado por todos los procesos exceda el tamaño real
+de la memoria fisica del sistema, asi aumentando el grado de multiprogramación.
+
+Tipos:
+
+- Standard: Mover todo el proceso
+
+  ![](img-silver/9-main-memory/swapping.png)
+
+- With paging: Requiere mucho tiempo mover *todo* el proceso. La mayoria de los
+  sistemas usan una variacion en la que paginas de un proceso (en vez de todo)
+  swappean. Las operaciones se llaman **page out** (mem -> store) y **page in**
+  (store -> mem)
+
+  ![](img-silver/9-main-memory/swapping-paging.png)
+
+- Mobile systems: Tipicamente no soportan swapping, ya que usan
+  flash storage (poco espacio, si se usa mucho se vuelven unreliable).
+  Android y IOS le piden a los programas que liberen memoria, y sino los matan.
+
+### Memory management examples
+
+- IA-32: 2 niveles de page-tables y soporta 4KB o 4MB page sizes.
+- x86-64, ARMv9: 64-bit arch con hierarchical paging.
+
+## Chapter 10 - Virtual Memory
+
