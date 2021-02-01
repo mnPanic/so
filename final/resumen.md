@@ -59,6 +59,24 @@
     - [Protección y reubicación](#protección-y-reubicación)
     - [Segmentacion](#segmentacion)
     - [Copy-on-write](#copy-on-write)
+  - [6 - Manejo de IO](#6---manejo-de-io)
+    - [Esquema de IO](#esquema-de-io)
+    - [Drivers](#drivers)
+    - [Interacción con dispositivos](#interacción-con-dispositivos)
+    - [Subsistema de IO](#subsistema-de-io)
+    - [Planificación de IO](#planificación-de-io)
+    - [Gestión de discos](#gestión-de-discos)
+    - [Spooling](#spooling)
+    - [IO Locking](#io-locking)
+    - [Protección de la información](#protección-de-la-información)
+      - [Backups](#backups)
+      - [Redundancia](#redundancia)
+        - [RAID 0 (Data Striping, Striped Volume)](#raid-0-data-striping-striped-volume)
+        - [RAID 1 (Mirror)](#raid-1-mirror)
+        - [RAID 4](#raid-4)
+        - [RAID 5](#raid-5)
+        - [RAID 5E](#raid-5e)
+        - [RAID anidados](#raid-anidados)
 
 ## Bibliografia
 
@@ -1128,3 +1146,358 @@ Nuevos procesos se crean con `fork()`, pero no copiamos inmediatamente las
 paginas a memoria, sino que se hace **copy-on-write**: al principio referencia a
 las paginas del proceso padre, pero ni bien hace una escritura, antes de dejar
 que suceda las duplico.
+
+## 6 - Manejo de IO
+
+Los dispositivos de IO se pueden categorizar como almacenamiento (nuestro foco
+principal), comunicaciones, interfaz de usuario, etc.
+
+Los SOs se tienen que preocupar de
+
+- Almacenamiento fisico: Discos rigidos, unidades de cinta (mas que nada hoy en
+  dia para backup), discos removibles.
+- Discos virtuales: NAS - Network Attached Storage, discos que se acceden
+  mediante la red (NFS, AFS, Coda, etc.)
+
+### Esquema de IO
+
+Un dispositivo de IO tiene conceptualmente dos partes
+
+- El dispositivo *fisico* en si
+- Un *controlador del dispositivo* (driver): interactua con el SO mediante algun
+  bus o registro.
+
+La estructura tipica es
+
+![](img/io/structure.png)
+
+### Drivers
+
+![](img/io/drivers.png)
+
+Los **drivers** están entre el subsistema de IO del SO y los dispositivos. Son
+componentes de software muy específicos que encapsulan conocimiento
+
+- Conocen los detalles a bajo nivel del dispositivo. Si el fabricante cambia la
+  logica de la electrónica, el driver también tiene que cambiar
+- Conocen las particularidades del SO para el cual se programaron.
+
+Ademas,Corren en maximo privilegio (pueden hacer colgar al sistema) y de ellos
+depende el rendimiento de IO (fundamental para el rendimiento del sistema).
+
+### Interacción con dispositivos
+
+- **Polling**: El driver periodicamente verifica si el dispositivo se comunico
+  - +: Sencillo y context-switching controlado
+  - -: Consume CPU (busy waiting)
+- **Interrupciones** (push): El dispositivo avisa mediante una interrupcion
+  - +: Eventos async poco frecuentes
+  - -: Genera context-switching impredecible
+- **DMA** (direct memory access): Para transferir grandes volumenes de data sin
+  intervencion del CPU. Requiere el controlador de DMA en HW. Cuando finaliza,
+  interrumpe al CPU.
+  > En vez de hacer que el CPU lea de a un reg por vez, al controlador de DMA le
+  > decis "pasame todo esto de tal lugar del disco a tal otro en memoria, y
+  > cuando termines todo me avisas (int)"
+
+Hoy en dia siguen vigentes los 3 porque tienen casos de uso distintos. Por
+ejemplo, los drivers de las placas de red hacen un modo *combinado*:
+interrupciones hasta que llega una, y despues hacen polling por un rato (ya que
+probablemente lleguen mas)
+
+### Subsistema de IO
+
+Se encarga de proveerle la API de manejo de archivos al programador. Una de las
+funciones del SO es brindar un acceso consistente a todos los dispositivos
+posibles, ocultando las particularidades tanto como sea posible. Por lo
+general es la POSIX, que permite trabajar todos los dispositivos como si fueran
+archivos
+
+- `open` / `close`
+- `read` / `write`
+- `seek`
+
+Y los dispositivos se separan en dos grupos
+
+- **Char device**: Se transmite info secuencialmente byte a byte. No soportan
+  acceso aleatorio y no usan cache. Ej: teclado, mouse, terminales, puerto
+  serie.
+- **Block device**: Se transmite info en bloque. Permite acceso aleatorio y por
+  lo general usan un buffer (cache). Ej: Disco rigido, memoria flash, CD-ROM.
+
+> Mejor que aleatorio es *arbitrario*
+
+> En linux, en `/dev` se encuentran todos los dispositivos.
+
+### Planificación de IO
+
+Hay que planificar como manejamos la cola de pedidos de IO para lograr el mejor
+rendimiento posible, ya que el disco tiene un cabezal que se mueve fisicamente,
+lo cual toma tiempo. Queremos minimizar los movimientos, el *seek time*.
+
+![](img/io/disk.png)
+
+Políticas de scheduling:
+
+- FIFO / FCFS: El primero que viene vamos. Pero si viene un pedido como 20, 200,
+  10, va y viene como loco.
+- SSTF (Shortest Seek Time First): Atender al mas cercano donde esta la cabeza
+  en ese momento. Pero puede producir inanicion. Es un algoritmo goloso (pero no
+  optimo)
+- Algoritmo del ascensor: Espero un rato y la cabeza siempre va del fondo hacia
+  la punta, va acumulando pedidos y los va haciendo en el camino. Esto suelen
+  hacer y de forma empírica es lo que funciona mejor.
+
+No se usa ninguno de forma pura, sino que combinaciones de todos.
+
+### Gestión de discos
+
+Filesystem: Como se organiza la información.
+
+Dependiendo del SO, formatear y meter un file system puede llegar a ser lo
+mismo o no. Estos bytes en este sector, tengo que leer y escribir
+
+- **Formatear**: Cada byte dentro del disco en realidad tiene más bits de los
+  que podemos leer. Lee esos bits y se los pasa al controlador. Como los medios
+  físicos son corrompibles, se usan esos bytes para detectar errores.
+  Funcionan como prefijo y postfijo a la parte donde efectivamente van los
+  datos en cada sector. Me asegura que lo que yo lea sea lo que yo tengo que
+  leer.
+
+- **Booteo**: Arrancar el SO. La parte donde el SO se carga a memoria.
+  Una computadora arranca con la RAM vacía. En la primer sección del disco,
+  lee los bytes y pone en memoria y hace un jump a esa dirección. Es fija,
+  corta y estándar. El *bootloader*.
+
+  Muchas veces bootean en partes, el primer programa carga un segundo programa
+  más largo, que va haciendo otras tareas.
+
+- **Bloque dañado**: Al leer un sector el prefijo y postfijo no coinciden.
+  Esa información de redundancia que yo agregué al leer veo que no está bien.
+  Los SO a veces tienen un manejo de bloques dañados.
+  Los SO "anotan" que un bloque está dañado.
+
+### Spooling
+
+Es una cuarta técnica de manejo de dispositivos, muy particular.
+
+El caso típico es el de la impresora.
+
+> Mandás a imprimir un documento de 30 paginas. El procesador de texto tiene
+> una barrita de avance que dice cuanto imprimió, y capaz el procesador de texto
+> piensa que terminó de imprimir pero la impresora sigue.
+
+Vas al *spooler* de la impresora, y ahí si dice el estado real.
+
+La idea sencilla es que es una cola de tareas armada por este pseudodispositivo.
+A medida que la impresora real se va liberando, el spooler le va mandando.
+
+El procesador de texto le manda por "socket", algo así como "/dev/printer" y
+empieza a mandar los bytes ahí. En /dev/printer hay un programa esperando, y
+cuando llegan los bytes agarra y los empieza a acumular. Y ese sí hace un open
+de la impresora y va escribiendo en el hardware. El spooler habla con el driver
+pero no es el driver, y el kernel no se entera que está haciendo spooling, pero
+el usuario sí.
+
+EL termino viene de Spool: *Simultaneus Peripheral Operation On-Line*
+
+> IPP internet printing protocol para las impresoras de red.
+> CUPS: Encapsula toda la complejidad y lo hace multi-impresora
+
+### IO Locking
+
+"Lock de los pobres"
+
+POSIX garantiza que `open(..., O_CREAT | O_EXCL)` es atómico y crea el archivo
+si no existe o falla si ya existe. Un lock de baja contención, en disco.
+Para desbloquear tengo que borrar el archivo, lo cual es atómico siempre.
+
+### Protección de la información
+
+Tiene sentido proteger la información? Que valor tiene?
+
+- Cuanto vale para mi
+- Que pasa si se pierde
+- Que cosas no puedo hacer sin ella
+
+Hay información que puedo recomputar. De acá sale la política de resguardo, que
+tiene costo en tiempo y $$.
+
+Estrategias
+
+- MSSVR: _Mirá si se va a romper!_. No funciona muy bien
+- Backup
+- Redundancia
+
+#### Backups
+
+Hacer una copia de seguridad (backup) consiste en resguardar la información
+importante en otro lado. Es fundamental.
+
+Se suele hacer en cinta, o incluso en bibliotecas de cintas robotizadas. La
+principal ventaja es que se pueden llevar a otro lugar. Si pongo las cintas al
+lado de donde estoy, si se prende fuego en centro de computo perdí la
+información igual. Cada tanto, las llevo a una sala cofre en otro lado. Toma
+tiempo, y se suele programar a los sistemas para que lo hagan por la noche.
+
+Una vez cada cierto tiempo copiás todo al disco rígido
+
+- Una vez al {mes|semana|etc.} copia total
+- Todas las noches una copia *incremental*: solo los archivos modificados desde
+  la última copia incremental.
+  - Ventaja: backup + rápido
+  - Desventaja: Tenés que aplicarlas de a 1. Si justo se rompió la del miercoles
+    cagas
+
+- Alternativamente, un backup *diferencial*, guardas las diferencias con
+  respecto al backup total. Como un balance entre el total y el incremental.
+
+Luego, para restaurar
+
+- Si solo hago copias totales, tomo la del dia correspondiente y listo
+- Si hago diferenciales, necesito la ultima total mas la ultima diferencial
+
+  Hoy = Ultimo total + ultimo dif
+
+- Si hago incrementales, necesito la ultima total y todas las incrementales
+  entre esa copia total y la fecha requerida.
+
+  Hoy = Ultimo total + $\sum_i Incremental_i$
+
+#### Redundancia
+
+A veces no alcanza con una copia de seguridad. El costo de que el sistema salga
+de línea es muy alto. Conviene implementar ***redundancia***.
+
+Esto se puede hacer mediante **RAID**: *Redundant Array of Independent Disks* es
+un sistema de almacenamiento de datos que utiliza multiples unidades (discos
+duros o SSDs) entre las cuales se distribuyen o replican los datos.
+
+La idea intuitiva es generar un disco virtual muy resistente en base a muchos
+discos comunes.
+
+Tener RAID no excluye de tener que hacer backup.
+
+Fuentes:
+
+- [Wikipedia](https://es.wikipedia.org/wiki/RAID)
+
+Pueden estar configurados en varios niveles, los cuales se diferencian en su
+integridad, tolerancia frente a fallos, tasa de transferencia y capacidad.
+
+Todas las implementaciones pueden soportar el uso de uno o mas *hot spares*
+(discos de reserva). Que son unidades preinstaladas que pueden usarse
+inmediatamente tras el fallo de un disco raid.
+
+Niveles:
+
+- RAID 0
+- RAID 1
+- RAID 0+1
+- RAID 2, 3, 4: no interesan
+- RAID 5
+
+##### RAID 0 (Data Striping, Striped Volume)
+
+![raid0](img/raid/raid-0.png)
+
+Un RAID 0 distribuye los datos equitativamente entre dos o mas discos, sin
+informacion de paridad que proporcione redundancia.
+
+Se usa para dar alto rendimiento de escritura, ya que se escriben en dos o mas
+discos de forma paralela.
+
+Se puede usar con discos de diferentes tamaños, pero el espacio añadido al
+conjunto esta limitado por el tamaño del disco mas chico (ej. 450GB y otro de
+100GB, el tamaño resultante es de 200GB, cada disco aporta 100GB).
+
+La probabilidad de fallo es inversamente proporcional al numero de discos del
+conjunto, pues para que falle es suficiente que lo haga *cualquiera* de los
+discos.
+
+##### RAID 1 (Mirror)
+
+![raid1](img/raid/raid-1.png)
+
+Crea una copia exacta (o espejo) de un conjunto de datos en dos o mas discos.
+
+Es util cuando queremos mas seguridad pero desaprovechando capacidad, ya que si
+perdemos un disco, tenemos al otro con la misma informacion.
+
+Un conjunto RAID 1 solo puede ser tan grande como el mas pequeño de sus discos.
+
+La fiabilidad incrementa exponencialmente con respecto a un solo disco, ya que
+la probabilidad de fallo es el producto de la de cada disco, pues para que falle
+tienen que fallar todos.
+
+El rendimiento de lectura incrementa de forma lineal con respecto al numero de
+copias. Un RAID 1 puede estar leyendo al mismo tiempo dos datos diferentes en
+dos discos diferentes.
+
+##### RAID 4
+
+![raid](img/raid/raid-4.png)
+
+Acceso independiente con discos dedicados a la paridad
+
+Usa division a nivel de bloques con un disco de paridad dedicado. Necesita al
+menos 3 discos fisicos.
+
+Es parecido a RAID 3 excepto porque divide a nivel de bloques en vez de bytes,
+lo cual permite que cada miembro del conjunto funcione independientemente cuando
+se solicita un unico bloque.
+
+Si la controladora de disco lo permite, un conjunto RAID 4 puede servir varias
+peticiones de lectura simultaneamente.
+
+##### RAID 5
+
+![raid](img/raid/raid-5.png)
+
+Distribuido con paridad.
+
+Es una divison de datos a nivel de bloques, que distribuye la info de paridad
+entre todos los discos miembros del conjunto. Genenralmente se implementass con
+soporte de hardware para el calculo de paridad.
+
+Necesita un minimo de 3 discos para ser implementado.
+
+En el ejemplo, una peticion de lectura de A1 seria servida por el disco 0, y una
+simultanea en el bloque B1 tendria que esperar, pero del bloque B2 podria ser
+atendida concurrentemente ya que seria realizada por el disco 2.
+
+Cada vez que se escribe un bloque de datos, se genera un bloque de paridad
+dentro de la misma division (stripe). Una serie de bloques (un bloque de cada
+uno de los discos en conjunto) se le llama *stripe* o division. Si otro bloque,
+o alguna porcion de un bloque, es escrita en ea misma division, el bloque de
+paridad es recalculado y vuelto a escribir.
+
+Los bloques de paridad se leen durante lecturas cuando alguna produce un error
+de CRC (error de verificacion de redundancia). El sector en la misma posicion
+relativa dentro de cada bloque de datos restantes en la divison y dentro del
+bloque de paridad se usan para reconstruir el sector erroneo, ocultando asi el
+error del resto del sistema.
+
+Si falla un disco entero del conjunto, los bloques de paridad de los discos
+restantes son combinados con los bloques de datos para reconstruir los datos del
+disco que fallo. **Pero si falla un segundo disco, provoca la perdida completa
+de los datos**
+
+##### RAID 5E
+
+![raid](img/raid/raid-5e.png)
+
+Variante de RAID que incluye discos de reserva, los cuales pueden estar
+conectados y preparados (*hot spare*) o en espera (*standby spare*). No supunen
+mejora en rendimiento, pero minimizan el tiempo de reconstruccion y la
+administracion necesaria ante fallos.
+
+##### RAID anidados
+
+Si lo toman, ver en wikipedia
+
+- **RAID 0+1**: Espejo de divisiones
+- **RAID 1+0**: Divison de espejos
+- **RAID 30**: Divison de niveles RAID con paridad dedicada
+- **RAID 100**: Division de divison de espejos
+- **RAID 10+1**: Espejo de espejos
