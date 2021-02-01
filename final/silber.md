@@ -137,6 +137,19 @@
     - [Swapping](#swapping)
     - [Memory management examples](#memory-management-examples)
   - [Chapter 10 - Virtual Memory](#chapter-10---virtual-memory)
+    - [Virtual memory background](#virtual-memory-background)
+    - [Demand paging](#demand-paging)
+    - [Copy-on-Write](#copy-on-write)
+    - [Page replacement](#page-replacement)
+      - [Page replacement algorithms](#page-replacement-algorithms)
+      - [Applications and Page replacement](#applications-and-page-replacement)
+    - [Frame allocation](#frame-allocation)
+      - [NUMA](#numa)
+    - [Thrashing](#thrashing)
+    - [Memory compression](#memory-compression)
+    - [Allocating Kernel Memory](#allocating-kernel-memory)
+    - [Other considerations](#other-considerations)
+    - [OS Virtual memory examples](#os-virtual-memory-examples)
 
 Notacion:
 
@@ -2594,3 +2607,435 @@ Tipos:
 
 ## Chapter 10 - Virtual Memory
 
+Las estrategias vistas hasta ahora requieren que el proceso entero este en
+memoria para ejecutar. La **memoria virtual** es una tecnica que permite que se
+ejecuten procesos que no estan 100% en memoria.
+
+Objetivos:
+
+- Memoria virtual y sus beneficios
+- Demand paging
+- FIFO, optimal, LRU page-replacement
+- Process working set & program locality
+- Linux, Win10 & Solaris virtual memory management
+
+Notas (azules)
+
+- **Major y minor page faults**
+
+  Las **major** page faults es cuando fue referenciada pero no esta en memoria,
+  entonces hay que traerla del backing store. Demand paging genera un ratio
+  inicial alto de major page faults.
+
+  Las **minor** ocurren cuando un proceso no tiene el mapping logico de la
+  pagina, pero esta en memoria. Ocurren por dos razones:
+
+  - Un proceso hace referencia a una shared library que ya esta en memoria, pero
+    no la tiene mapeada.
+  - Una pagina se roba de un proceso y se pone en la free-frame list, pero no se
+    pone en cero aun.
+
+  Para ver el numero para cada proceso en Linux, se puede usar el comando
+
+  ```bash
+  ps -eo min_flt,maj_flt,cmd
+  ```
+
+### Virtual memory background
+
+El hecho de que las instrucciones a ejecutar deban estar en memoria implica que
+el proceso entero deberia estarlo. Pero no siempre se requiere todo el programa
+para ejecutar, por ej. por handlers de errores que no pasan seguido, o
+estructuras de datos que no se usan en su totalidad. Aun en los casos en donde
+se necesite el programa entero, no necesariamente se requiere todo al mismo
+tiempo.
+
+Ejecutar un programa que esta parcialmente en memoria traeria varios beneficios:
+
+- Un programa no esta restringido por la cantidad de memoria fisica. Los
+  usuarios se abstran y escriben programas para un *virtual* address space
+  enorme, simplificando.
+- Como cada programa toma menos memoria, se pueden ejecutar mas a la vez.
+- Se necesita menos I/O porque se traen menos paginas a memoria.
+
+(!) La **memoria virtual** abstrae la memoria fisica a un arreglo enorme de
+storage uniforme, separando la memoria logica percibida por desarrolladores de
+la fisica.
+
+Las ventajas son
+
+- Un programa puede ser mas grande que la memoria fisica
+- No hace falta que este 100% en memoria
+- Los procesos pueden compartir memoria
+- Los procesos pueden crearse de forma mas eficiente
+
+![](img-silver/10-virtual-memory/virtual-mem.png)
+
+El **virtual address space** de un proceso es el logical (o virtual) view de
+como un proceso esta almacenado en memoria. Esto suele ser que arranca de alguna
+posicion y existe contiguo en memoria. El espacio entre el heap y stack se trae
+a memoria solo de ser necesario. Esto se conoce como **sparse** address space.
+
+![](img-silver/10-virtual-memory/virt-addr-space.png)
+
+Ademas, la memoria virtual permite que archivos y memoria se compartan entre dos
+o mas procesos mediante page sharing. Beneficios:
+
+- Compartir bibliotecas del sistema (como libc). Se mapea el shared object al
+  virtual address space. Cada proceso piensa que es suya, pero en realidad las
+  paginas donde estan en memoria fisica son compartidas por todos los procesos.
+  Tipicamentse mapean como read only.
+
+  ![](img-silver/10-virtual-memory/shared-library.png)
+
+- IPC con shared memory.
+- Enabling copy-on-write para que se compartan las paginas al principio del
+  `fork()`.
+
+### Demand paging
+
+(!) **Demand paging** consiste en cargar las paginas solo cuando son necesarias
+(*demanded*) durante la ejecucion de un programa. Por lo tanto, las paginas que
+nunca se solicitan nunca se cargan a memoria.
+
+Es necesario algun tipo de soporte de HW para saber si cada pagina esta en
+memoria o en el backing store. Para esto se puede usar el valid-invalid bit en
+la PT.
+
+![](img-silver/10-virtual-memory/valid-invalid.png)
+
+(!) Cuando se intenta de acceder a una pagina que no esta en memoria (i.e bit
+invalid) ocurre un **Page Fault**. La pagina debe ser traida del backing store a
+un page frame disponible de memoria. Los pasos son
+
+1. Leer en una tabla interna (usualmente dentro de la PCB) del proceso para
+   determinar si era una referencia valida o un invalid memory access
+2. Si era invalido, matamos al proceso. Si era valida pero no trajimos la pagina
+   todavia, la traemos.
+3. Encontramos una frame libre.
+4. Agendar una operacion de secondary storage para traer la pagina al nuevo frame
+5. Cuando termina el read, modificamos la tabla y la PT para indicar que ahora
+   esen memoria
+6. Reiniciar la instruccion que fue interrumpida por el trap. Ahora el proceso
+   puede acceder a la pagina como si hubiera estado siempre en memoria.
+   Esto puede ser no trivial en algunas arquitecturas.
+
+![](img-silver/10-virtual-memory/page-fault.png)
+
+**Pure demand paging** es cuando arrancamos el proceso con 0 paginas cargadas, y
+la primer instruccion a ejecutar genera un Page Fault.
+
+Como los procesos suelen tener **localida de referencia**, la performance de
+demand paging suele ser buena.
+
+El **swap space** es la seccion de secondary storage usada para almacenar las
+paginas que no estan presentes en memoria principal.
+
+Para encontrar los frames libres, se usa una **free-frame list**, un pool de
+frames libres. Se asignan usando **zero-fill-on-demand**, cuando las piden son
+borradas (por cuestiones de seguridad). Eventualmente se vuelve suficientemente
+chica para ser repopulada con una estrategia de **page replacement**.
+
+Para que no se vea afectada tanto la eficiencia del sistema, hay que intentar de
+que la cantidad de page faults sea minima.z
+
+### Copy-on-Write
+
+(!) **Copy-on-write** permite que los procesos hijos compartan el address space
+de los padres hasta que alguno de los dos modifique una pagina, momento en el
+cual se hace una copia de ella. Hace **page sharing**. Para las paginas que son
+read-only, se comparten para siempre.
+
+![](img-silver/10-virtual-memory/copy-on-write-pre.png)
+![](img-silver/10-virtual-memory/copy-on-write-post.png)
+
+### Page replacement
+
+El problema que tiene la memoria virtual es que estamos potencialmente asignando
+mas memoria de la que hay disponible fisicamente, y si todos quieren usar toda
+su memoria disponible hay que elegir cuales sacar.
+
+![](img-silver/10-virtual-memory/page-repl-need.png=)
+
+(!) Cuando hay poca memoria, un algoritmo de **page-replacement** selecciona una
+existente en memoria para ser reemplazada por una nueva.
+
+(!) Algoritmos:
+
+- FIFO
+- Optimo
+- LRU: Los LRU puros son poco practicos, se suelen usar los LRU-approximation.
+
+Si no hay un frame libre, encontramos una que no se este usando y la liberamos,
+escribiendola en secondary storage de ser necesario (si no esta el bit de dirty,
+no fue modificada y no hace falta moverla). Luego se actualizan las tablas
+relacionadas.
+
+![](img-silver/10-virtual-memory/page-repl.png)
+
+#### Page replacement algorithms
+
+En general queremos el de menor page-fault rate.
+Se comparan entre si corriendolos en una **reference string** (string de
+memory references) y comparandolos entre si.
+
+- **FIFO**: Se reemplaza la mas vieja. Puede ser malo porque que sea la mas
+  vieja no quiere decir que no este activamente usada.
+
+  ![](img-silver/10-virtual-memory/fifo.png)
+
+- **Optimal** (OPT / MIN)
+
+  Es el algoritmo con el page-fault rate mas bajo de todos. Reemplaza la pagina
+  que no se va a usar por el periodo mas largo de tiempo.
+
+  No se puede implementar porque requiere conocer el futuro. Se usa para
+  comparar a los demas con el optimo.
+
+  ![](img-silver/10-virtual-memory/opt.png)
+
+- **LRU** (Least recently used): intuitivamente, es como optimal pero mirando
+  hacia el pasado. La que no fue usada por el mayor tiempo.
+
+  ![](img-silver/10-virtual-memory/lru.png)
+
+  La pregunta ahora es *como* saber cual fue. Se suele hacer con ayuda del HW
+  porque sino seria muy lento.
+
+  - Counters: Tener un contador que incrementamos con cada uso. De esa forma, al
+    reemplazar *buscamos* el minimo.
+
+  - Stack: Se guardan los numeros de pagina en un stack. Cada vez que se
+    referencia una, se saca y se pone arriba. De esa forma, la primera es la mas
+    recientemente usada y la ultima la menos. Evita las busquedas pero
+    incrementa levemente el tiempo de update.
+
+- **LRU-Aproximation**
+  
+  No todos los sistemas proveen soporte de HW para *true LRU*. Muchos sistemas
+  proveen al menos un **reference bit**, que se setea por el HW cada vez que una
+  pagina se referencia (read o write). Estan asociados con cada entry del page
+  table. Inicialmente, estan todos en 0, y a medida que se van usando se van
+  poniendo en 1. En cualquier momento podemos determinar cuales paginas se
+  usaron y cuales no, pero no el *orden*.
+
+  Esto es la base para la implementacion de algoritmos que aproximan LRU
+
+  - **Additional-Reference-Bits**
+
+    Hacer polling cada intervalos regulares de tiempo del bit referenced de una
+    pagina, y resetearlo. Se va shifteando el reference bit a un numero de
+    cierta cantidad de bytes, cuya cantidad determina la cantidad de intervalos
+    que se consideran. Interpretandolos como un uint, el mas chico es el menos
+    usado.
+
+  - **Second-Chance**
+
+    Es igual a FIFO, pero cuando hay que remover una pagina, si tiene el bit
+    referenen 1 se le da una *second chance*: se le pone en 0 y su arrival time
+    se resetea. Por lo tanto, una pagina que se le dio una segunda chance no se
+    reemplaza hasta que el resto hayan sido reemplazadas, y si se usa con
+    suficiente frecuencia como para mantener el bit en 1, nunca se reemplaza.
+
+    ![](img-silver/10-virtual-memory/second-chance.png)
+
+  - **Enhanced Second-Chance**
+
+    Ademas del bit referenced, considera el modify bit, y a ambos como un par
+    ordenado.
+
+    - (0, 0): Ni usado ni modificado, la mejor para reemplazar
+    - (0, 1): No recientemente usado pero modificado, no es igual de buena
+      porque va a haber que bajar la pagina a memoria secundaria
+    - (1, 0): Recientemente usada pero limpia, probablemente se va a usar
+      devuelta pronto.
+    - (1, 1): Recientemente usada y modificada. Probablemente se use devuelta
+      pronto, y va a haber que bajarla a memoria secundaria.
+
+    De esta forma, se reemplaza la pagina de la primer clase no vacia.
+
+- **Counting-based**: Mantener un contador de la cantidad de referencias que se
+  hacen a cada pagina
+
+  - **LFU**: Least frequently used. La de menor count
+  - **MFU**: Most frequently used.
+
+  Ambos malos.
+
+#### Applications and Page replacement
+
+Hay algunas apps (como DBs) que saben mejor que el SO como manejar su memoria,
+ya que este lo implementa para proposito general. Por eso a veces provee una
+particion del secondary storage como un array de bloques logicos sin
+intervencion del file system: un **raw disk**.
+
+### Frame allocation
+
+Como asignamos la cantidad fija de memoria libre a los distintos procesos? La
+estrategia basica es asignarle al proceso de usuario cualquiera que este libre.
+
+Restricciones:
+
+- No se puede asignar mas que el total de frames libres
+- Hay que asignar al menos un minimo. Mientras menos paginas le asignemos a cada
+  proceso, aumenta el page-fault rate. Y necesitamos tener suficientes para
+  tener todas las paginas que referenciaria una instruccion. Esto esta definido
+  por la arquitectura.
+
+Algoritmos:
+
+- **Equal allocation**: Para splittear *m* frames entre *n* procesos, le damos
+  m/n a cada uno.
+- **Proportional allocation**: Diferentes procesos tienen diferentes
+  requerimientos de memoria. Se asigna memoria a cada proceso proporcional a su
+  tamaño.
+
+  Esto no tiene en cuenta la diferencia de prioridad entre procesos, entonces
+  otra proporcion podria ser segun eso.
+
+(!) Otro factor que afecta la asignacion de frames es el reemplazo de paginas.
+En base a eso, podemos dividir los algoritmos en dos categorias:
+
+- *global* page-replacement selecciona una pagina de cualquier proceso en el
+  sistema. Un proceso puede robarle un frame a otro. Por lo general da
+  throughput mayor pero con variacion, ya que cuantas paginas se pueden robar
+  depende de factores externos al proceso.
+
+- *local* page-replacement selecciona de las asignadas a ese proceso.
+
+#### NUMA
+
+En sistemas con **non-uniform memory access** (NUMA), en donde la velocidad de
+acceso a memoria no es la misma para todos los procesadores. Aca, la
+performaences mejor si el manejo de memoria virtual se hace NUMA-aware.
+
+![](img-silver/1-intro/numa.png)
+
+### Thrashing
+
+(!) **Thrashing** Ocurre cuando el sistema pasa mas tiempo manejando la porque
+paginacion que ejecutando.
+
+> Por ejemplo, si un proceso tiene menos frames asignadas que pages en su
+> working set, va a estar constantemente tirando page faults.
+
+![](img-silver/10-virtual-memory/thrashing.png)
+
+(!) Una **localidad** representa un set de paginas que se estan usando en
+conjunto. Segun el **locality model**, cuando un proceso ejecuta, se mueve de
+localidad a localidad (las cuales pueden solaparse).
+
+![](img-silver/10-virtual-memory/locality.png)
+
+Soluciones posibles:
+
+- Working set
+
+  Un **working set** se basa en localidad y se define como el set de paginas
+  actualmente en uso por un proceso. Es una aproximacion de ella.
+
+  ![](img-silver/10-virtual-memory/working-set.png)
+
+  Con el, podemos asegurar siempre asignar la misma cantidad de paginas que el
+  working set, preveniendo thrashing. La dificultad es mantener su trackeo.
+
+- Page-Fault Frequency
+
+  Es una solucion mas directa al problema. Como thrashing hace que el page fault
+  rate incremente, ponemos cotas superiores (para darle mas paginas, o matar un
+  proceso si no hay mas) e inferiores (para sacarle paginas) al page-fault rate
+  de un proceso.
+
+  ![](img-silver/10-virtual-memory/page-fault-freq.png)
+
+- Current practice: La solucion actual es agregar suficiente memoria para mas o
+  menos tener al working set de todos al mismo tiempo.
+
+### Memory compression
+
+(!) **Memory compression** es una tecnica de manejo de memoria que comprime
+cierta cantidad de paginas en una sola. Es una alternativa a paging y se usa en
+sistemas mobile que no soportan paging.
+
+Cuando no hay frames libres, en vez de bajarlas al secondary storage se
+comprimen varias en una.
+
+### Allocating Kernel Memory
+
+Cuando un proceso de usuario pide memoria, se le da un page frame de los de la
+free frame list, posiblemente remplazando alguno.
+
+La memoria de kernel se asigna de un pool diferente de la lista de usuario, por
+dos razones:
+
+1. El kernel a veces usa menos de una pagina, lo cual llevaria a fragmentacion.
+2. Las paginas de user-mode processes no hace falta que sean contiguas. Pero
+   algunos dispositivos de hardware interactuan directo con memoria (sin memoria
+   virtual), con lo que requeririan que sea contigua.
+
+Estrategias:
+
+- **Buddy system**
+
+  Asigna memoria de un segmento de tamaño fijo de paginas fisicamente contiguas.
+  Esto se hace con un **power-of-2 allocator**, que satisface peticiones en
+  unidades potencia de 2. (4KB, 8KB, 16KB, etc.)
+
+  ![](img-silver/10-virtual-memory/buddy-system.png)
+
+  > Por ejemplo, el tamaño del segmento es 256 KB y el kernel pide 21KB de
+  > memoria. El segmento se va subdividiendo en dos **buddies** hasta que se
+  > llega al mínimo que satisface el pedido.
+
+  Una ventaja es que es muy barato hacer **coalescing**, cuando se liberan los
+  bloques se pueden ir uniendo los buddies para formar bloques mas grandes.
+
+  La desventaja principal que tiene es que rounding al siguiente power of 2
+  causa fragmentacion interna. (por ej. una de 33KB se le da 64KB)
+
+- **Slab allocation**
+
+  ![](img-silver/10-virtual-memory/slab.png)
+
+  No tiene fragmentacion interna. Mas info en el libro.
+
+### Other considerations
+
+Las decisiones principales a la hora de hacer un paging system son el algoritmo
+de reemplazo y una politica de asignacion, pero hay otras.
+
+- Prepaging: Con pure demand paging, inicialmente un proceso tiene muchos PFs.
+  Para evitarlo, la estrategia de **prepaging** trae paginas que van a ser
+  necesarias de una.
+- Page size: Potencia de 2, de 4KB a 4MB
+  - Mas grande
+    - para que la PT sea mas chica, ya que esta copiada en cada proceso.
+    - Para que haya menos page faults.
+  - Mas chica
+    - porque es mejor utilizada la memoria. En promedio, la mitad de la
+      ultima pagina se pierde por fragmentacion. Para minimizar las perdidas,
+      tiene ser mas chica
+    - Para tener mas granularidad con la localidad (**resolution**)
+- TLB reach: (!) La cantidad de memoria accesible desde la TLB, es igual a la
+  cantidad de entires x page size. Una forma de incrementarlo es hacer que las
+  paginas sean mas grandes.
+
+  Pero no se quiere que sean *tan* grandes por fragmentacion interna
+- Inverted page tables: Mas en el libro
+- Program structure
+- IO interlock and Page locking: No tiene que pasar que una pagina que iba a ser
+  usada como buffer para IO sea robada (global replacement) por otro.
+  
+  Dos formas de solucionarlo:
+  - **lockear** las paginas para que no se reemplacen
+  - Solamente hacer IO a memoria del sistema (overhead de copias extra para
+    escrituras).
+
+### OS Virtual memory examples
+
+Todos lo hacen de forma similar, con demand paging y copy-on-write. Usan una
+variacion de LRU-approximation llamada *clock algorithm*.
+
+- Linux
+- Windows
+- Solaris
