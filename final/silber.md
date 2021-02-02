@@ -150,6 +150,22 @@
     - [Allocating Kernel Memory](#allocating-kernel-memory)
     - [Other considerations](#other-considerations)
     - [OS Virtual memory examples](#os-virtual-memory-examples)
+- [Part five - Storage Management](#part-five---storage-management)
+  - [Chapter 11 - Mass Storage Structure](#chapter-11---mass-storage-structure)
+    - [Mass storage structure overview](#mass-storage-structure-overview)
+      - [HDDs](#hdds)
+      - [NVMs](#nvms)
+      - [Connection methods](#connection-methods)
+      - [Address mapping](#address-mapping)
+    - [HDD Scheduling](#hdd-scheduling)
+    - [NVM Scheduling](#nvm-scheduling)
+    - [Error Detection and Correction](#error-detection-and-correction)
+    - [Storage device management](#storage-device-management)
+    - [Swap space management](#swap-space-management)
+    - [Storage attachment](#storage-attachment)
+    - [RAID](#raid)
+    - [Object Storage](#object-storage)
+  - [Chapter 12 - I/O Systems](#chapter-12---io-systems)
 
 Notacion:
 
@@ -3039,3 +3055,280 @@ variacion de LRU-approximation llamada *clock algorithm*.
 - Linux
 - Windows
 - Solaris
+
+# Part five - Storage Management
+
+Los sistemas de computadoras deben brindar almacenamiento masivo para guardar
+permanentemente archivos y datos. Los dispositivos usados varian mucho
+
+- Transfer char / block
+- Acceso secuencial / aleatorio (arbitrario)
+- Sync / async
+- Dedicated / shared
+- read-only / read-write
+
+Y debido a esto, el SO (el subsistema de IO) debe proveer una interfaz que deje
+controlar a las aplicaciones todos los aspectos de los dispositivos pero
+manteniendola lo mas simple posible.
+
+Como son un bottleneck de performance, ademas se quiere optimizar IO para la
+maxima concurrencia.
+
+## Chapter 11 - Mass Storage Structure
+
+Estructura del storage masivo. Principalmente es secondary storage, con HDDs y
+NVM (non volatile memory), e incluso puede haber tertiary storage (magnetic
+tape, cloud storage, etc.). Todos son conocidos en conjunto como NVS (*non
+volatile storage*).
+
+Objetivos:
+
+- Estructura fisica de secondary storage devices
+- Performance de ellos
+- IO scheduling algorithms
+- Servicios del SO para mass storage, RAID
+
+Notas (azul)
+
+- **Disk transfer rates**
+- **Magnetic tapes**
+- **RAID structuring**
+- **InServ**
+
+### Mass storage structure overview
+
+(!) Los HDDs y NVM devices son las unidades de IO principales para secondary
+storage en la mayoria de las computadoras. El moderno esta estructurado como un
+arreglo grande de bloques logicos.
+
+(!) Se conectan a una computadora de 3 maneras
+
+1. Local IO ports
+2. Directamente al mother
+3. Mediante la conexion a una red (communications network o storage network)
+
+(!) Los requests para IO en el storage secundario se general por el file system
+y el subsistema de memoria virtual. Cada uno especifica el address del device a
+referenciar en forma de un bloque logico.
+
+#### HDDs
+
+Conceptualmente son simples, con la siguiente forma:
+
+![](img-silver/11-mass-storage/hdd-head.png)
+
+- **Transfer rate**: Tasa de transferencia entre el disco y la computadora
+- **Positioning time** / random access time: compuesto por dos
+  - **Seek time**: Tiempo necesario para mover la cabeza al cilindro deseado (de
+    afuera para adentro)
+  - **Rotational latency**: Tiempo necesario para que el sector rote llegando al
+    disk head.
+
+#### NVMs
+
+Son electricos en vez de mecanicos. Pueden ser mas reliable que las HDDs porque
+no tienen partes que se mueven, y mas rapidos tambien (no hay seek time ni
+rotational latency). Pero son mucho mas caros por MB y tienen menos capacidad.
+
+- SSD (solid-state drive)
+- USB Drive (flash drive)
+
+Por limitaciones de los NAND semiconductors de los que estan construidos, los
+tiempos son read < write < erase, y el erase se puede hacer una cantidad finita
+de veces hasta que el sector no se pueda usar mas. Por esto usan algoritmos por
+abajo (el SO no se entera porque usa bloques logicos) para optimizarlo.
+
+#### Connection methods
+
+Los secondary storage devices pueden estar conectados a una computadora por el
+system bus o un IO bus.
+
+- ATA: advanced techology attachment
+- SATA: serial ATA. El mas comun
+- eSATA
+- SAS: serial attached SCSI
+- USB: Universal serial bus
+- FC: fibre channel
+
+Como los NVMs son mas rapidos que los HDDs, se creo NVMe (express) que conecta
+al dispositivo derecho al system PCI bus, aumentando el throughput y
+disminuyendo la latencia.
+
+Los data transfers se hacen a traves de host (computadora) / device
+**controllers**.
+
+#### Address mapping
+
+Los dispositivos se direccionan como un array unidimensional largo de **bloques
+logicos**, que son la unidad mas chica de transferencia. Se mapean a sectores
+fisicos o paginas del device.
+
+Un **LBA** (logical block address) es mas facil para usar que sector, cilindro,
+etc. A pesar de que pueden no tener nada que ver, se suele asumir que las LBA
+estan relacionadas a las direcciones fisicas, que si crece el LBA suele
+significar que crece la fisica.
+
+### HDD Scheduling
+
+(!) Los algoritmos de disk-scheduling pueden mejorar el bandwith efectivo de las
+HDDs, el tiempo de respuesta promedio y su varianza. La performance de cada
+politica puede variar mucho de disco en disco.
+
+El **bandwidth** de un dispositivo es el numero total de bytes transferidos
+sobre el tiempo que tardaron (tiempo del primer request hasta completar el
+ultimo). Se puede mejorar el bandwidth cambiando el *orden* en el cual las IO
+requests se realizan.
+
+Cuando se le hace una peticion a un dispositivo, si esta ocupado y no la puede
+atender inmediatamente se encola. Reordenando esta cola se puede maximizar la
+performance minimizando el seek time.
+
+Si bien nada garantiza que LBA = physical address, se asume que estan
+relacionados para los algoritmos.
+
+- **FCFS**: Fair pero no es el mas rapido, ya que puede moverse mucho entre
+  requests.
+
+  ![](img-silver/11-mass-storage/scheduling-fcfs.png)
+
+- **SCAN** (elevator algorithm): La cabeza del disco se comporta como un
+  ascensor, atiende las peticiones yendo hacia arriba y despues vuelve en el
+  orden reverso y hace esas.
+
+  ![](img-silver/11-mass-storage/scheduling-scan.png)
+
+- **C-SCAN** (circular SCAN): provee un wait time mas uniforme. Al igual que
+  SCAN, mueve la cabeza de un lado del disco al otro, atendiendo peticiones en
+  el camino. Pero cuando llega al final, vuelve al principio (circular) sin
+  atender peticiones en el camino.
+
+  ![](img-silver/11-mass-storage/scheduling-cscan.png)
+
+Para seleccionar un algoritmo?
+
+### NVM Scheduling
+
+(!) Como no hay partes que se muevan, la performance no varia mucho entre
+algoritmos de scheduling y suele bastar con FCFS.
+
+### Error Detection and Correction
+
+(!) El almacenamiento y transmision de data es complejo y frecuentemente resulta
+en errores. Error detection intenta de encontrar esos problemas y avisarle al
+sistema para que lo corrija, y evitar que se propague. Error correction puede
+detectar y reparar problemas, dependiendo en la cantidad de data para correccion
+disponible y la cantidad de data que fue corrompida.
+
+- Deteccion: checksums, usar aritmetica para computar, guardar y comparar
+  valores en words de tamaño fijo.
+
+  - Parity bit: Cada byte tiene un bit que indica su paridad. Si 1 bit se daña,
+  podemos saberlo porque cambia la paridad del byte. Pero si se dañan 2 podemos
+  no darnos cuenta.
+
+  - CRCs ([cyclic redundancy check](https://www.mathpages.com/home/kmath458/kmath458.htm))
+
+- ECC (error correction code): Detecta el problema y lo corrige. Contiene
+  suficiente info para reconstruir data corrompida (**soft error**). Pero puede
+  haber demasiados cambios y que no se puedan corregir automaticamente (**hard
+  error**)
+
+### Storage device management
+
+(!) Los dispositivos de almacenamiento estan particionados en uno o mas cachos
+de espacio. Cada particion puede tener un *volume* o ser parte de un
+multidevice volume. Los file systems se crean en volumenes.
+
+(!) El SO maneja los bloques del disp de almacenamiento. Los nuevos dispositivos
+por lo general vienen pre-formateados. El dispositivo es particionado, se crean
+file systems, y se reservan boot blocks para guardar el bootloader si va a
+contener un sistema operativo. Finalmente, cuando un bloque o pagina se
+corrompe, el sistema debe tener una manera de bloquearla o reemplazarla
+logicamente con una demas.
+
+### Swap space management
+
+Swapping se usa de forma intercambiable con *paging*, ya que los SOs modernos
+swappean paginas en vez de procesos enteros.  
+
+(!) Un swap space eficiente es clave para tener buena performance en algunos
+sistemas. Algunos dedican una particion raw para swap space, mientras otros usan
+un file en el file system, y otros proveen ambas opciones (por ej Linux).
+
+### Storage attachment
+
+- **Host-attached storage**: Accedido mediante IO ports locales. Usan muchas
+  tecnologias, la mas comun SATA.
+
+- **Network-attached storage**: Acceder a storage a traves de la red.
+
+  ![](img-silver/11-mass-storage/net-attached-storage.png)
+
+  > Ej: NFS, CIFS, iSCSI
+
+- **Cloud storage**: Igual a NAS pero a traves de internet o un WAN a un data
+  center. Pero el cloud storage no es un file-system pelado, es API based.
+
+  > Ej: Amazon S3, Drive, Dropbox.
+
+- **Storage area networks** (SAN): Las network-attached incrementan la latencia de la
+  red. Una SAN es una red privada flexible.
+
+  ![](img-silver/11-mass-storage/storage-area-net.png)
+
+### RAID
+
+(!) Como usualmente se requiere mucho storage en sistemas grandes, y porque
+estos fallan en diversas maneras, por lo general los secondary storage devices
+se hacen redundantes mediante algoritmos de RAID (**redundant arrays of
+independent disks**). Estos permiten que se use mas de un drive para una
+operacion y que se siga operando e incluso recovery automatico en caso de
+fallas. Se organizan en diferentes niveles, cada uno provee una combinacion
+entre reliability y high transfer rates.
+
+- Reliability: La solucion al problema de reliability es introducir
+  **redundancia**, guardar info extra que normalmente no se necesita pero nos
+  deja recuperarnos de fallas. La tecnica mas simple pero mas cara es
+  **mirroring**: duplicar cada drive. Un disco logico consiste de dos fisicos en
+  los cuales se replican los writes, un **mirrored volume**. El **MTBF** (*mean
+  time between failures*) mejora.
+
+- Performance: Se puede mejorar el transfer rate haciendo **data striping**.
+  Spitear los bits de cada byte en multiples drives (bit-level striping), o
+  bloques de un archivo (block-level striping)
+
+Niveles:
+
+![](img-silver/11-mass-storage/raid-lvls.png)
+
+- **RAID level 0**: Block striping sin redundancia
+- **RAID level 1**: Drive mirroring
+- **RAID level 4**: Memory-style ECC organization. Se guardan bits de paridad en
+  el N+1-esimo drive (si los bloques se guardan del 1 al N) para corregir
+  errores. Un problema es el overhead de computar el parity.
+- **RAID level 5**: Block-interleaved distributed parity. Difiere del 4 en que
+  distribuye la paridad entre los discos tambien.
+- **RAID level 6**: P + Q redundancy scheme. Es como 5 pero guarda info
+  redundante extra.
+- **Multidimensional RAID level 6**
+- **RAID level 0 + 1**: Combina los niveles 1 y 0.
+- **RAID level 1 + 0**: Mirror de a pares y sobre los pares el striping.
+
+![](img-silver/11-mass-storage/raid-comb.png)
+
+Algunos niveles tambien tienen un **hot-spare**, un disco a usar de reemplazo si
+falla otro.
+
+La limitación principal es que RAID protege ante errores de los medios físicos,
+pero no de otros errores de hardware o software.
+
+### Object Storage
+
+(!) Object storage se usa para problemas de Big Data como indexar la internet y
+cloud photo storage. Los objetos son self-defining collections of data,
+addressed por ID de objeto en vez de filename. Tipicamente usan replicacion para
+proteccion de data, computan basados en la data en sistemas donde la copia del
+dato existe, y son horizontalmente escalables para mucha capacidad y facil
+expansion.
+
+## Chapter 12 - I/O Systems
