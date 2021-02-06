@@ -77,6 +77,17 @@
         - [RAID 5](#raid-5)
         - [RAID 5E](#raid-5e)
         - [RAID anidados](#raid-anidados)
+  - [7 - File Systems](#7---file-systems)
+    - [File System](#file-system)
+    - [Punto de montaje](#punto-de-montaje)
+    - [Representacion de archivos](#representacion-de-archivos)
+    - [Directorios](#directorios)
+    - [Link simbolico](#link-simbolico)
+    - [Manejo de espacio libre y cache](#manejo-de-espacio-libre-y-cache)
+    - [Consistencia](#consistencia)
+    - [Caracteristicas avanzadas](#caracteristicas-avanzadas)
+    - [Performance](#performance)
+    - [NFS](#nfs)
 
 ## Bibliografia
 
@@ -1501,3 +1512,180 @@ Si lo toman, ver en wikipedia
 - **RAID 30**: Divison de niveles RAID con paridad dedicada
 - **RAID 100**: Division de divison de espejos
 - **RAID 10+1**: Espejo de espejos
+
+## 7 - File Systems
+
+Un **archivo** es una secuencia de bytes, sin estructura, identificados por un
+nombre. Es responsabilidad de cada programa interpretarlo.
+
+### File System
+
+El modulo de kernel que se encarga de organizar la informacion en el disco es el
+**file system** (sistema de archivos). Algunos SOs soportan uno solo (DOS solo
+FAT), mas de uno (windows FAT, FAT32, NTFS, etc.), y otros permiten que se
+carguen dinamicamente (como Unix).
+
+Responsabilidades:
+
+- Ver como se organizan de manera logica los archivos
+  - Interna: Como se estructura la info dentro del archivo (ex windows y unix
+    usan una secuencia de bytes)
+  - Externa: Como se organizan los archivos. Todos los FS soportan el concepto
+    de *directorios*, lo que hace que se organizen de forma jerarquica en forma
+    de arbol.
+
+- Casi todos soportan *links*: alias, otro nombre para el mismo archivo. Deja de
+  ser un arbol la estructura y se convierte en un grafo (que puede tener ciclos)
+
+  ![](img/fs/fs-dg.png)
+
+- Como se nombrara los archivos: Caracter de separacion, extension o no,
+  restricciones de longitud y encoding, case sensitivity, prefijado o no por el
+  dispositivo, punto de montaje.
+
+  Ej:
+  - `/usr/local/etc/apache.conf`
+  - `C:\Program Files\Antivirus\Antivirus.exe`
+  - `\\SERVIDOR3\Parciales\parcial1.doc`
+  - `servidor4:/ejercicios/practica3.pdf`
+
+### Punto de montaje
+
+Si tengo mas de una unidad de almacenamiento externo, tengo que indicarle al SO
+de alguna manera en que punto del FS comienza su raiz.
+
+### Representacion de archivos
+
+Como representar archivos, gestionar el espacio libre, y que hacer con la
+metadata determina las caracteristicas del FS. Para el FS, un archivo es una
+lista de bloques en los que estan los datos + metadata.
+
+- **Naive**: Todos los bloques de un mismo archivo los guardo contiguos en el
+  disco. Para leerlo es rapido, pero a medida que se modifica el FS, se genera
+  mucha fragmentacion. Sirve para FS *inmutables* (read-only).
+
+- **Lista enlazada**: Lecturas consecutivas razonablemente rapidas, pero las
+  arbitrarias son muy lentas. Y desperdicia espacio de cada bloque indicando
+  donde esta el siguiente
+
+  ![](img/fs/structure-linked-list.png)
+
+- **Tablas**: Una tabla que por cada bloque dice en que bloque esta el
+  siguiente, y a parte tengo cada archivo en donde comienza.
+
+  > Ej: El archivo A esta en los bloques 1, 2, 5, 7, 9 y el B en 4, 3, 8.
+  >
+  > | Bloque | Siguiente |
+  > | ------ | --------- |
+  > | 0      | vacio     |
+  > | 1      | 2         |
+  > | 2      | 5         |
+  > | 3      | 8         |
+  > | 4      | 3         |
+  > | 5      | 7         |
+  > | 6      | vacio     |
+  > | 7      | 9         |
+  > | 8      | -1        |
+  > | 9      | -1        |
+
+  **FAT** (*File Allocation Table*) usa este metodo
+
+  La desventaja que tiene es la concurrencia (unica tabla, mucha contencion) y
+  las inconsistencias. La tabla la tengo en memoria, pero es necesario bajarla a
+  disco cada tanto. Se trata como una cache. Pero si se corta la luz, tengo una
+  inconsistencia. Es poco robusto.
+
+- **inodos** (index nodes)
+
+  Cada archivo tiene un inodo, que esta compuesto por
+
+  - Al principio metadata
+  - *Single indirect block*: Punteros a nodos con datos. Hasta 16MB.
+  - *Double indirect block*: Apunta a una tabla de single indirect. Hasta 32GB.
+  - *Triple indirect block*: Apunta a un bloque de double indirect. Hasta 70TB.
+
+  Como hay una tabla por archivo, hay mucho menos contencion, y solo estan en
+  memoria las listas correspondientes a los archivos abiertos.
+
+  Si se corta la luz, solo se corrompen los archivos abiertos en ese momento.
+
+  `ls -i` te deja ver el numero de inodo.
+
+  ![](img/fs/inode.png)
+
+### Directorios
+
+Para implementar el arbol de directorios, hay un inodo reservado que es el *root
+directory*. Dentro de los bloques de los directorios hay una lista de inodos con
+los nombres de archivo/directorio.
+
+### Link simbolico
+
+```bash
+ln -s
+```
+
+Ahi ves explicitamente una flechita. No comparten el inodo
+
+En el inodo cuyo contenido dice "che, anda a leer el archivo al cual estoy
+linkeado"
+
+Es una manera de apuntar a algo exista o no, porque solo se ve el nombre.
+
+El principal uso es hacer un link a un archivo que esta en otro file system.
+Si no te deja hacer un link normal porque pertenece a un inodo de otro file
+system, pero si se puede hacer el link normal
+
+![](img/fs/links.png)
+
+### Manejo de espacio libre y cache
+
+Leer del silber
+
+### Consistencia
+
+Los datos se pueden perder con un corte abrupto, y los SOs brindan formas de
+forzar que se escriba la cache (`fsync`, pero no es un flush porque no se
+limpia)
+
+Pero el sistema se puede interrumpir antes de que eso suceda, dejandolo el FS en
+un estado inconsistente. Paar eso brindan un programa que restaura la
+consistencia (`fsck` - file system check en Unix), que realiza una serie de
+chequeos que nacen del *invariante* de los inodos para restaurarlo.
+
+Cuando la computadora se apaga de forma normal, se escribe un bit que lo indica.
+Si cuando prende no esta set, se corre de forma automatica.
+
+Pero es bastante lento porque puede llegar a recorrer todo el disco, entonces
+hay alternativas para evitar hacerlo de forma parcial o total
+
+- **Soft updates**: Yo cacheo bloques de datos, pero la metadata trato de
+  grabarla casi siempre. Deja de ser binario si esta en sync o no. La ventaja es
+  que permite que el recorrido para verificar el invariante se pueda hacer con
+  el sistema funcionando.
+
+  El sistema arranca, esta un poco mas lento porque corre un proceso, pero no te
+  quedas esperando un rato largo a que el sistema levante.
+
+  No es la linea evolutiva ganadora
+
+- **Journaling**: Algunos FS llevan un *log* o *journal*, un registro de los
+  cambios que hay que hacer. Cuando el sistema levanta, se aplican los cambios
+  aun no aplicados.
+
+### Caracteristicas avanzadas
+
+- Cuotas de disco: Limitar cuanto usa cada usuario.
+- Encripcion: https://xkcd.com/538/s
+- Snapshots: Fotos del disco en determinado momento, para hacer copias de
+  seguridad.
+- RAID por software, mas lento pero mayor control independiente del proveedor
+- Compresion
+
+### Performance
+
+.
+
+### NFS
+
+Leer del libro
