@@ -166,6 +166,19 @@
     - [RAID](#raid)
     - [Object Storage](#object-storage)
   - [Chapter 12 - I/O Systems](#chapter-12---io-systems)
+    - [I/O Hardware](#io-hardware)
+      - [Memory-Mapped IO](#memory-mapped-io)
+      - [Polling](#polling)
+      - [Interrupts](#interrupts)
+      - [DMA (Direct Memory Access)](#dma-direct-memory-access)
+    - [Application IO Interface](#application-io-interface)
+      - [Nonblocking and Async IO](#nonblocking-and-async-io)
+      - [Vectored IO](#vectored-io)
+    - [Kernel IO Subsystem](#kernel-io-subsystem)
+    - [IO Requests to Hardware Operations](#io-requests-to-hardware-operations)
+    - [STREAMS](#streams)
+    - [Performance](#performance)
+- [Part six - File System](#part-six---file-system)
 
 Notacion:
 
@@ -3332,3 +3345,388 @@ dato existe, y son horizontalmente escalables para mucha capacidad y facil
 expansion.
 
 ## Chapter 12 - I/O Systems
+
+El rol de la mayoria de los sistemas de computadoras es IO y computo. En muchos
+casos lo principal es IO y el computo es incidental. El rol del SO es manejar y
+controlar operaciones y devices de IO
+
+Objectives:
+
+- Estructura del subsistema de IO
+- Principios y complejidades del hardware de IO
+- Aspectos de performance de IO hard y soft.
+
+Controlar los dispositivos de IO es una tarea muy importante. Como estos varian
+mucho en funcionalidad y velocidad, muchos metodos son necesarios para
+controlarlos. Estos conforman el **subsistema de IO** del kernel.
+
+Para encapsular los detalles de cada device, el kernel se estructura para usar
+**device drivers**, que presentan una interfaz uniforme de acceso a los
+dispositivos al subsistema de IO.
+
+### I/O Hardware
+
+(!) Los componentes basicos de hardware que intervienen en IO son
+
+- Buses
+- Controladores de dispositivos
+- Los dispositivos en si
+
+Un dispositivo se comunica con un computer system enviando señales a traves de
+un punto de conexion, o **port**. Si los devices comparten un set de cables en
+comun, esa conexion se llama un **bus**, que ademas tiene un protocolo que
+define que mensajes pueden enviarse a traves de el.
+
+![](img-silver/12-io/pc-bus.png)
+
+Un **controller** opera un port, bus o device.
+
+(!) Mover data entre los dispositivos y la memoria se hace por el CPU programado
+como IO (polling, interrupts) o se delega a un controlador de DMA
+
+- IO Port y registers
+- Handshaking entre host y device controller
+  - Polling loops
+  - Via interrupts
+- Delegar el trabajo a un controlador de DMA para transferencias de muchos
+  datos.
+
+#### Memory-Mapped IO
+
+Para que el CPU pueda darle comandos y datos a un controllador para hacer IO,
+el controlador expone uno o mas registros para datos y señales de control. El
+CPU escribe en ellos para comunicarse con el controlador.
+
+Puede haber instrucciones especiales para transferir bytes o words a un IO port,
+o puede soportar **memory-mapped IO**: Los registros son mapeados al espacio de
+memoria del procesador.
+
+Tipicamente consiste en 4 registros
+
+- **data-in register**: Leido por el host para obtener input
+- **data-out register**: Escrito por el host para enviar output
+- **status register**: Contiene bits que pueden ser leidos por el host, que
+  indican estados.
+- **control register**: Escrito por el host para iniciar un comando o cambiar el
+  modo de operacion del device.
+
+#### Polling
+
+Cuando el host hace **busy-waiting** o **polling** constantemente del estado
+del dispositivo.
+
+> Por ejemplo, esta en un loop leyendo el registro `status` hasta que no esta
+> en *busy*.
+
+Se vuelve ineficiente cuando no encuentra ningun dispositivo listo para
+ejecutar. Seria mas eficiente que el dispositivo le avise al CPU cuando este
+listo (*interrupts*)
+
+#### Interrupts
+
+El mecanismo de interrupciones funciona con el hardware de CPU que tiene una
+**interrupt-request line** que lee despues de cada instruccion a ver si hubo
+una interrupcion. Cuando la detecta, salta al **interrupt-handler routine**,
+que determina la causa, procesa la interrupcion, y retorna de ella volviendo a
+lo que estaba haciendo.
+
+El dispositivo *raises* una interrupt, el CPU *catches* it y la *despacha* al
+interrupt handler, que *clears* la interrupcion atendiendo al dispositivo.
+
+![](img-silver/12-io/interrupt-io.png)
+
+En SOs modernos, es necesario
+
+- Diferir handling de interrupciones durante procesamiento critico
+- Forma eficiente de despachar al interrupt handler correcto
+- Interrupciones multinivel, para distinguir prioridades y responder con la
+  urgencia adecuada.
+- Una manera de que las instrucciones obtengan la atencion directa del SO (por
+  separado de IO requests) para PFs o divisones por 0. (*traps*)
+
+De estas cosas se encarga el **interrupt-controller** (hardware).
+
+Hay dos request lines de interrupciones, **nonmaskable** (errores no
+recuperables) y **maskable** (se puede apagar por el CPU antes de entrar a
+secciones criticas que no deben ser interrumpidas).
+
+El mecanismo de interrupciones acepta una **address**, que usa para buscar en
+un **interrupt vector** el handler asociado. Cuando hay mas dispositivos que
+posiciones, se usa **interrupt chaining**: cada entry tiene una lista de
+handlers y se ve uno por uno (como hashing with chaining).
+
+![](img-silver/12-io/pentium-int-vector.png)
+
+El mecanismo de interrupciones tambien sirve para handlear **excepciones**,
+como divisones por 0, page faults, etc.
+
+Las syscalls tambien se implementan con interrupciones, las llamadas a funciones
+de biblioteca raisean un **software interrupt** o **trap**, que luego es
+atendido por el kernel. Estos suelen tener baja prioridad.
+
+Es mas comun el uso de interrupt-driven IO, polling se usa para high-throughput
+IO. Tambien hay algunos drivers que usan interrupciones cuando el IO rate es
+bajo y switchean a polling cuando incrementa al punto en el que polling es mas
+rapido y eficiente, por ej. una placa de red.
+
+#### DMA (Direct Memory Access)
+
+Para un dispositivo que hace transferencias grandes de datos, seria muy poco
+eficiente hacerlo de a bits (**programmed IO**, **PIO**), y se delega esa tarea
+a un procesador de proposito especifico: **DMA** controller.
+
+El handshaking entre el DMA controller y el device controller se hace mediante
+las **DMA-request** y **DMA-ack** wires.
+
+![](img-silver/12-io/dma.png)
+
+### Application IO Interface
+
+Se abstrael los detalles y diferencias entre los dispositivos de IO
+clasificandolos en clases que se acceden mediante una **interfaz**. Esto se
+encapsula en **device drivers**, modulos de kernel que internamente son adhoc a
+devices especificos pero exportan una interfaz uniforme.
+
+![](img-silver/12-io/io-structure.png)
+
+La interfax de los drivers varia segun el SO.
+
+![](img-silver/12-io/io-characteristicxs.png)
+
+Los dispositivos pueden tener muchas caracteristicas distintas
+
+- **Character stream or block**: character: transfiere byte por byte, block:
+  bloques de bytes como unidad
+- **Sequential or random access**: El secuencial transfiere data en un orden
+  fijo, mientras que el random (arbitrary) access puede hacer seek de cualquier
+  lugar
+- **Sync o async**
+- **Shareable o dedicated**
+- **Velociadad**
+- **Read-write, read only, write once**
+
+(!) El syscall interface brindada a aplicaciones esta diseñada para poder
+controlar muchas categorias de hardware, y las divisiones son:
+
+- **Block & character-stream devices**
+
+  Usan el **block-device interface**: `read`, `write`, `seek`, etc.
+
+  Algunas apps saben mejor como manejar la memoria, entonces se les brinda
+  acceso directo mediante **raw IO**. Hay un compromiso que es que el SO le de
+  un modo sin buffering y locking: **direct IO**
+
+- **Memory mapped files**
+- **Network sockets**
+
+   Usan el **socket** interface.
+
+- **Clocks & Timers**: Current time, elapsed time, timers para triggerear una
+  operacion despues de cierto tiempo. El hardware que lo hace se llama
+  **programmable interval timer**.
+
+  Este se puede configurar para que espere un tiempo y haga un interrupt. Por
+  ejemplo, el kernel lo usa para preemtpion de procesos en scheduling.
+
+  Las computadoras tienen clock hardware, el **HPET** (high-performance event
+  timer). Sus triggers generan interrupciones. Si estos ticks se usan para
+  mantener la hora del sistema, puede desviarse por delays. Esto se puede
+  corregir con protocolos como **NTP** (network time protocol)
+
+La mayoria de los SOs tambien tienen un **escape** o **back door** que pasa de
+forma transparente comandos arbitrarios de aplicaciones a device drivers. (en
+UNIX, `ioctl`). De esta forma no hay que hacer nuevas syscalls.
+
+(!) Las syscalls suelen bloquear al proceso que las ejecuta, pero tambien hay
+nonblocking y async calls en caso de que no se pueda esperar.
+
+#### Nonblocking and Async IO
+
+IO puede ser blocking o nonblocking. Cuando una aplicacion hace un **blocking**
+syscall, el thread se bloquea hasta que este listo, y ahi se pone en ready
+devuelta. Es mas facil escribir este codigo que codigo async.
+
+Algunos procesos de usuario necesitan **nonblocking** IO, como una interfaz de
+usuario que recibe input mientras procesa y muestra data. Esto se puede
+implementar con threads (un thread se bloquea y otro sigue ejecutando) pero
+tambien algunos SOs proveen nonblocking syscalls para IO, que retornan cuantos
+bytes se transfirieron.
+
+Una alternativa es syscalls async, terminan al toque y despues informan el
+resultado.
+
+![](img-silver/12-io/io-methods.png)
+
+Por default cuando una aplicacion pide un network send o un storage write, lo
+bufferea y retorna a la aplicacion. Cuando sea posible, el SO completa la
+request. Algunos sistemas lo flushean con un intervalo y proveen formas de
+hacerlo a mano (para no tener que esperar el intervalo), o formas de indicar que
+sea sync en vez de async.
+
+#### Vectored IO
+
+Se hace uso de metodos **gather-scatter** para transferir mas de una cosa a la
+vez.
+
+### Kernel IO Subsystem
+
+El subsistema de IO coordina una coleccion de servicios disponibles al resto de
+las aplicaciones y otras partes del kernel.
+
+- Manejo del namespace de archivos y devices: Manejar las conexiones entre los
+  devices de hardware y los nombres simbolicos de los archivos usados por las
+  aplicaciones.
+- Access control a files y devices
+- Operation control (un modem no puede hacer `seek()`)
+- File system space allocation
+- Device allocation
+- Buffereo, cacheo, spooling
+- IO scheduling
+- Monitoreo de estado de dispositivos, manejo de errores, recupero de fallas
+- Config e inicializacion de drivers
+- Power management de dispositivos de IO.
+
+Y los niveles mas altos (de abstraccion) del IO subsystem acceden a los
+dispositivos via los drivers.
+
+- **IO Scheduling**
+
+  Consiste en determinar un buen orden para ejecutar una
+  secuencia de IO requests. Esto puede mejorar el performance del sistema,
+  compartir un dispositivo de forma fair entre procesos y reducir el avg IO
+  waiting time.
+
+  Cuando soporta async io, tiene que tener un **device-status table** para
+  trackear varios IO requests al mismo tiempo.
+
+  ![](img-silver/12-io/driver-status-table.png)
+
+- **Buffering**
+
+  Un **buffer** es un area de memoria que almacena data que se esta transfiriendo
+  entre dos dispositivos o entre un disp y una aplicacion. Se hace por tres
+  razones:
+
+  - Lidiar con la disparidad de velocidades entre el producer y consumer de un
+    stream de datos.
+
+    > Ejemplo: Se esta recibiendo un archivo por internet. La velocidad de la red
+    > es mucho mas lenta que el disco, entonces sin buffering el disco tendria que
+    > ir igual de lento. Se almacenan en un buffer de memoria los bytes recibidos
+    > de la red, y cuando llego el buffer entero, se escribe al disco en una sola
+    > operacion. Pero como no es instantaneo y la placa de red necesita un lugar
+    > donde guardar datos, se usa un segundo buffer mientras (**double
+    > buffering**).
+
+  - Proveer adaptaciones para dispositivos con data-transfer size diferentes.
+
+  - Soportar **copy semantics**: cuando una app escribe un buffer a memoria, si
+    despues lo modifica, no se ve afectado lo que escribio (i.e se guarda una
+    copia). Esto tambien se puede implementar con mem virtual y copy-on-write.
+
+- **Caching**
+
+  Una **cache** es una region de memoria rapida que tiene copias de datos, y
+  acceder a ella es mas rapido que a la copia original.
+
+- **Spooling and Device Reservation**
+
+  Un **spool** (*simultaneous peripheral operations on-line*) es un buffer que
+  mantiene el output para un device, como impresora, que no puede aceptar
+  *interleaved* data streams. Los usuarios quieren poder imprimir concurrentemente
+  pero no que sus impresiones salgan mezcladas.
+  El SO solventa este problema interceptando todas las llamadas a la impresora,
+  cuando una app termina de imprimir, pasa a la cola del spooler, que las va
+  despachando de a una a la impresora.
+
+  Tambien otros SOs brindan formas de que un proceso *reserve* un dispositivo
+  para que no sea usado por otros concurrentemente.
+
+- **Error Handling**
+
+Los dispositivos o transferencias pueden fallar, ya sea de forma transitoria,
+como cuando se cae la red, o de forma permanente, como que se muera un disco.
+
+En general, las IO syscalls devuelven un codigo de estado que dice si salio bien
+o mal.
+
+- **IO Protection**
+
+  Un usuario puede intentar de hacer *ilegal* IO. Para prevenirlo, definimos
+  todas las instrucciones de IO como privilegiadas, y de esa manera deben
+  llamarlas a traves del SO (con una syscall)
+
+  Ademas, todo memory-mapped IO y port memory locations tienen acceso protegido
+  por el mecanismo de proteccion de memoria.
+
+  ![](img-silver/12-io/io-syscall.png)
+
+- **Kernel IO Data Structures**
+
+  ![](img-silver/12-io/kernel-io-structure.png)
+
+- **Power Management**
+
+  Por ej. en datacenters que tienen que gastar mucho en cooling, o en
+  dispositivos moviles en los cuales se diseña el SO con power management como
+  prioridad. Tres aristas princiupales
+
+  - Power collapse: Apagar casi todo, pero aun asi recibir interrupciones, para
+    consumir la menor cantidad de energia posible cuando no se usa.
+  
+  - Component-level power management: Una infraestructura que le permite al SO
+    saber la jerarquia y relacion de los componentes fisicos para saber cuales
+    se pueden o no apagar y en que orden.
+
+  - Wakelocks: Una aplicacion adquiere y libera *wakelocks* que evitan que el
+    dispositivo se vaya a dormir.
+
+### IO Requests to Hardware Operations
+
+Como asociamos un filename con el dispositivo? En MS-DOS FAT son prefijos en el
+nombre, como `C:\...`, pero en UNIX no hay una diferenciacion clara. Tiene una
+**mount table** que asocia prefijos de paths con device names.
+
+Cada device tiene un **major** (tipo de dispositivo, indica que driver hay que
+llamar) y **minor** (instancia del dispositivo, para que el driver indexe en una
+tabla de dispositivos) device number.
+
+![](img-silver/12-io/io-request-lifecycle.png)
+
+### STREAMS
+
+(!) **STREAMS** es una implementacion y metodologia que provee un framework para
+un approach modular e incremental de escribir device drivers y network
+protocols. A traves de el los drivers se pueden *stackear*, con los datos
+pasando a traves de ellos secuencialmente y bidireccionalmente.
+
+### Performance
+
+(!) Las IO syscalls son costosas en terminos de consumo de CPU porque hay que
+atravesar muchas capas de software entre un dispositivo fisico y una aplicacion.
+Estas capas implican overhead en context switching, cruzar barreras de
+proteccion del kernel, signal e interrupt handling para atender a los
+dispositivos de IO, y la carga de CPU y memoria en copiar data entre buffers de
+kernel y application space.
+
+Ejemplo de comunicacion entre computadoras via la red
+
+![](img-silver/12-io/intercomputer-comms.png)
+
+Para mejorar performance, se pueden implementar los siguientes principios
+
+- Reducir # context switches
+- Reducir copias a memoria para transferir de disp a app
+- Reducir la frecuencia de interrupciones usando transferencias grandes,
+  controladores mas inteligentes y polling (si se puede minimizar el busy
+  waiting)
+- Incrementar concurrencia usando DMA
+- Mover primitivas de procesamiento al hardware para que puedan ser concurrentes
+  con el CPU y bus
+
+Y donde se deberia implementar la funcionalidad de IO? Device hardware, device
+driver, o application software? Por lo general se sigue la siguiente progresión
+
+![](img-silver/12-io/func-progression.png)
+
+# Part six - File System
