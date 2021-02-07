@@ -179,6 +179,18 @@
     - [STREAMS](#streams)
     - [Performance](#performance)
 - [Part six - File System](#part-six---file-system)
+  - [Chapter 13 - File-System Interface](#chapter-13---file-system-interface)
+    - [File Concept](#file-concept)
+      - [File Attributes](#file-attributes)
+      - [File Operations](#file-operations)
+      - [File Types](#file-types)
+      - [File Structure](#file-structure)
+      - [Internal File Structure](#internal-file-structure)
+    - [Access Methods](#access-methods)
+    - [Directory Structure](#directory-structure)
+    - [FS Protection](#fs-protection)
+    - [Memory-Mapped Files](#memory-mapped-files)
+  - [Chapter 14 - File-System Implementation](#chapter-14---file-system-implementation)
 
 Notacion:
 
@@ -3730,3 +3742,311 @@ driver, o application software? Por lo general se sigue la siguiente progresión
 ![](img-silver/12-io/func-progression.png)
 
 # Part six - File System
+
+Un **archivo** es una coleccion de info relacionada definida por su creador. Son
+mapeadas por le SO a dispositivos fisicos de almacenamiento masivo. Un file
+system define *como* se hace esto, ademas de como se acceden y manipulan.
+
+Acceder al physical storage puede ser lento, los FS deben ser diseñados para
+hacerlo de forma eficiente.
+
+## Chapter 13 - File-System Interface
+
+Para la mayoria de los usuarios es el aspecto mas visible del SO. Consiste en
+dos partes: una coleccion de archivos y una estructura de directorios.
+
+Objetivos:
+
+- Funcion de FS
+- Interfaces a FS
+- Design tradeoff (access methods, file sharing, file locking, dir structures)
+- FS Protection
+
+Notas:
+
+- **Java file locking**
+- **Unix permissions**
+
+  Directory y file protection se manejan de la misma manera. Cada archivo tiene
+  tres campos, owner, group y universe que pueden tener tres bits, rwx (read, write, execute).jj
+
+### File Concept
+
+(!) Un file es un TAD definido e implementado por el SO, una secuencia de
+registros logicos. Estos registros pueden ser un byte, una linea (de longitud
+fija o variable) o un *data item* mas complejo. El SO puede soportar varios
+tipos o dejar el soporte a las programas de aplicacion.
+
+Las computadoras pueden guardar info en varios medios fisicos. El SO para
+abstraer esto de sus usuarios, provee una vista logica uniforme de la
+informacion persistida a traves de la unidad logica de storage: el **file**.
+
+Los archivos suelen representar programas (source & object) y data. Pueden ser
+*free form* o tener un formato estricto. Pero en general son sequencias de bits,
+bytes, lineas o records, cuyo significado es definido por su creador y usuario.
+
+#### File Attributes
+
+Los archivos tienen un nombre por el cual son identificados, para la
+conveniencia del usuario. Sus atributos varian entre SOs pero tipicamente
+consisten en:
+
+- **Nombre**: El file name simbolico que es la unica informacion guardada de
+  forma human-readable.
+- **Identificador**: Tag unico (usualmente un numero) que identifica al file
+  dentro del file system - el non-human-readable name para el archivo.
+- **Type**: Usada si el SO soporta diferentes tipos de archivos
+- **Location**: Puntero al dispositivo y lugar fisico en el que se encuentra
+- **Tamaño**: El tamaño actual del archivo y posiblemente el maximo permitido.
+- **Protection**: Informacion de control de acceso (quien puede hacer que)
+- **Timestamps y identificacion de usuarios**: Creation, last modification, last
+  use, etc.
+
+La informacion de los archivos se guarda en la estructura del directorio.
+
+#### File Operations
+
+Un archivo es un TAD que tiene las siguientes operaciones basicas, provistas por
+el SO a traves de syscalls:
+
+- **Create**: Se tiene que reservar espacio para el archivo y se tiene que
+  agregar un entry a un directorio.
+
+  Tambien puede aceptar access-mode (r, rw, ro, etc.) info.
+- **Open**: Para no tener que chequear permisos y evaluar los nombres antes de
+  cada operacion, se debe hacer un `open`. Si sale bien, retorna un *handle* que
+  se usa como argumento para las demas.
+- **Write**: Se le pasa el open file handle y la informacion a ser escrita. El
+  sistema debe mantener un **write pointer** de donde se deberia hacer el
+  siguiente si es secuencial.
+- **Read**: Se le pasa un handle y un buffer. El SO debe mantener un **read
+  pointer**. Por lo general los writes y reads usan el mismo puntero, un
+  **current-file-position pointer**.
+- **Reposition**: Se modifica el puntero de posicion del file, tambien se llama
+  **file seek**
+- **Delete**: Se libera el espacio y se saca el directory entry. Si hay **hard
+  links** (mas de un nombre [directory entry] para el mismo file) no se borra
+  hasta quno se haya borrado el ultimo link.
+
+- **Truncate**: Borrar los contenidos de un file pero mantener sus atributos.
+  Evita borrar y recrear.
+
+Otras operaciones incluyen append al final y rename. En conjunto, estas
+operaciones primitivas se pueden combinar para realizar otras.
+
+> Por ejemplo, `copy` seria create la nueva, open la vieja, read de vieja y
+> write a la nueva.
+
+Tambien son necesarias operaciones que cambian los atributos de un archivo.
+
+El SO mantiene una **open-file table** que contiene info de todos los archivos
+abiertos. De esta forma, cuando se hace una operacion, se pasa un indice a esta
+tabla y no es necesario buscar el archivo devuelta en el directorio. Este indice
+tipicamente lo retorna open.
+
+Como puede haber dos procesos que abran un archivo concurrentemente, hay dos
+niveles de tablas, una por proceso y otra a nivel de sistema. Las entries de la
+del proceso apuntan a la del sistema, que tiene un **open count**, cuantos
+procesos la tienen abierta (cuando llega a 0 se remueve). Ademas, tiene
+informacion como donde esta y sus permisos de acceso.
+
+Algunos SOs proveen formas de *lockear* files o partes de ellos. Un **shared
+lock** es como un reader-lock, muchos procesos pueden adquirir el lock
+concurrentemente. Un **exclusive lock** es como un writer lock, solo puede
+tenerlo uno a la vez. Este locking puede ser **mandatory** (el SO no deja a
+otros adquirirlo, asegura la integridad del lock) o **advisory** (pasa a ser
+responsabilidad de los desarrolladores)
+
+#### File Types
+
+Una tecnica usual para distinguir tipos de archivos es nombrarlos sufijados por
+una extension `{name}.{extension}`. Como por ej `resume.docx`, `server.c`,
+`ReaderThread.cpp`.
+
+Las aplicaciones tambien usan extensiones para indicar los tipos de archivos en
+los que estan interesados. No siempre son requeridos. Como el SO no brinda
+soporte, se pueden tomar como *hints* para las aplicaciones que las usan.
+
+![](img-silver/13-fs-overview/file-types.png)
+
+#### File Structure
+
+Los tipos se pueden usar para denotar estructuras internas de los archivos, que
+pueden estar soportadas o no por los SOs. El problema es que al soportarlas se
+vuelven complicados. UNIX por ejemplo solo soporta que los archivos sean
+secuencias de 8bit bytes.
+
+Si o si tienen que soportar executable files como formato (eg elf) para poder
+cargar y ejecutar programas.
+
+#### Internal File Structure
+
+(!) Una tarea importante del SO es mapear los archivos logicos a dispositivos de
+almacenamiento fisico como HDDs o NVM devices. Como no necesariamente es el
+mismo el physical record size que el logico, puede ser necesario ordenar logicos
+dentro de fisicos. Esto puede ser hecho por el SO o el application program.
+
+### Access Methods
+
+Los archivos guardan info que debe poder ser accedida de alguna manera y copiada
+a la memoria.
+
+- **Sequential access**: Se lee en orden, un record tras otro. Es el mas comun y
+  simple. Se aumenta y decrementa automaticamente el puntero.
+
+  ![](img-silver/13-fs-overview/seq-access.png)
+
+- **Direct access** (o **relative access**): Un archivo esta compuesto por
+  **logical records** de tamaño fijo que deja que se escriban en cualquier
+  orden. Esta basado en el modelo del disco de un file. Las DBs suelen ser de
+  este tipo.
+
+  El numero de bloque que usa el usuario es relativo, comienza en 0 para cada
+  file.
+
+- **Other access methods**: Se construyen sobre direct access, y suelen
+  involucrar la construccion de un **indice** del archivo.
+
+### Directory Structure
+
+(!) Dentro de un FS, es util crear directorios para poder organizar los archivos
+
+La organizacion del directorio debe permitir
+
+- Buscar un file, y potencialmente buscar files que matcheen un patron
+- Crear un file y agregarlo al directorio
+- Borrar un archivo y sacarlo del directorio. Puede dejar un agujero y un FS
+  podria tener metodos para defragmentarlo.
+- Listar files
+- Renombrar files
+- Recorrer el FS
+
+Esquemas mas comunes:
+
+- **Single level**
+
+  Es la estructura mas simple. Todos los archivos se guardan en el mismo directorio.
+
+  (!) En un sistema multiusuario causa problemas de naming, ya que cada una debe
+  tener un nombre unico.
+
+  ![](img-silver/13-fs-overview/single-level-dir.png)
+
+- **Two level**
+
+  (!) Solventa el problema del primero creando un directorio para cada usuario.
+
+  Cada usuario tiene su **user file directory (UFD)**, contenido en el **master
+  file directory (MFD)**.
+
+  ![](img-silver/13-fs-overview/two-level-dir.png)
+
+  Un usuario y un filename definen un **path name**. Los directorios buscados
+  cuando se nombra un file son el **search path**.
+
+- **Tree structure**
+
+  (!) Es la generalizacion natural de una estructura de dos niveles (ya que son
+  arboles de altura 2), permite que un usuario cree *subdirectorios* para
+  organizar los archivos.
+
+  Cada directorio puede tener files o subdirectorios, que suelen ser tambien
+  archivos pero tratados de forma especial.
+
+  ![](img-silver/13-fs-overview/tree-structure.png)
+
+  Cada proceso tiene un **current directory**.
+
+  Los paths pueden ser de dos formas
+
+  - **Absolute path names**: Comienzan del root (`/`) y siguen un camino hasta
+    el fspecificado.
+  - **Relative path name**: Definen un path desde el current directory.
+
+- **DAG** (Directed Acyclic Graph)
+
+  (!) Permiten que los usuarios compartan subdirectorios y files pero complican
+  busqueda y borrado.
+
+  Una estructura de arbol no permite que se compartan, pero un **acyclic graph**
+  si.
+
+  ![](img-silver/13-fs-overview/dag-structure.png)
+
+  Hay varias formas de poder compartir directorios, una usada por UNIX es un
+  **link**, que es efectivamente un puntero a otro file o directorio. Este se
+  podria implementar como un path name, entonces al buscar, si nos encontramos
+  con algo que esta marcado como link, seguimos el link (**resolve**) para
+  encontrar el file real.
+
+  Hay que tener trackeo de quien tiene links al file para no dejar
+  dangling-pointers al borrar. Unix y Windows dejan los links cuando los files
+  se borran, y es responsabilidad del usuario darse cuenta que se borraron.
+
+  Para **hard links** o links no simbolicos, Unix mantiene una cuenta de cuantos
+  apuntan a un archivo, y solo se borra cuando haya 0.
+
+- **General graph**
+
+  (!) Permite completa flexibilidad en compartir archivos y directorios pero a
+  veces requiere garbage collection para recuperar espacio de disco no usado.
+
+  El problema de los DAG es asegurar que no haya ciclos.
+
+  Dejando que haya ciclos, tenemos que asegurarnos no recorrer dos veces las
+  mismas cosas.
+
+  Es necesario usar **garbage collection** cuando no necesariamente que no sea 0
+  quiere decir que sigue habiendo referencias (por los ciclos, self-references)
+
+  ![](img-silver/13-fs-overview/graph-structure.png)
+
+### FS Protection
+
+(!) Remote FS presentan desafios en reliability, performance y seguridad. Los
+*Distributed Information* systems mantienen usuario, host y info de acceso para
+que los clientes y servidores puedan compartir informacion del estado para
+manejar uso y acceso.
+
+(!) Como los archivos son el medio principal de almacenamiento de informacion en
+la mayoria de los sistemas, es necesario file protection en sistemas
+multiusuario. El acceso a files puede ser controlado por separado para cada tipo
+de acceso, read, write, execute, append, delete, list dir, etc. File protection
+puede ser provista por access lists, passwords u otras tecnicas.
+
+Es necesario controlar el acceso a archivos. Los mecanismos de proteccion
+limitan los *tipos* de accesos que se pueden hacer (read, write, excecute,
+append, delete, list, change attributes)
+
+La forma mas comun es hacer que dependa de la *identidad* de los usuarios. Una
+forma de implementarlo es con un **access-control list (ACL)** que lista todos
+los usuarios que tienen permiso para hacer algo. Pero es dificil de mantener,
+entonces muchos sistemas organizan en tres categorias a los usuarios y su
+conexion con los archivos:
+
+- **Owner**: El creador del archivo
+- **Group**: Set de usuarios que necesitan acceso similar
+- **Other**: El resto de los usuarios del sistema
+
+Se ve mas en el chapter 17 (protection)
+
+Otro approach es ponerle password a los archivos.
+
+### Memory-Mapped Files
+
+Otro metodo de acceder archivos. **memory mapping** un file consiste en asociar
+una parte del virtual address space al file. De esta forma, con el primer read o
+write se trae una pagina entera del file, y los accesos siguientes son manejados
+como accesos a memoria comunes y corrientes. Y manipular files a traves de
+memoria es mas rapido que el overhead causado por `read` y `write`.
+
+En unix se hace con `mmap`.
+
+![](img-silver/13-fs-overview/mmap-files.png)
+
+Varios procesos pueden mapear el mismo file concurrentemente para compartir
+informacion. Por lo general *shared memory* se implementa memory-mapping files.
+
+![](img-silver/13-fs-overview/mmap-shared-mem.png)
+
+## Chapter 14 - File-System Implementation
