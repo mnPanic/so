@@ -191,6 +191,19 @@
     - [FS Protection](#fs-protection)
     - [Memory-Mapped Files](#memory-mapped-files)
   - [Chapter 14 - File-System Implementation](#chapter-14---file-system-implementation)
+    - [FS Structure](#fs-structure)
+    - [FS Operations](#fs-operations)
+    - [Directory Implementation](#directory-implementation)
+    - [Allocation Methods](#allocation-methods)
+      - [Contiguous Allocation](#contiguous-allocation)
+      - [Linked Allocation](#linked-allocation)
+      - [Indexed Allocation](#indexed-allocation)
+      - [Allocation Performance](#allocation-performance)
+    - [Free Space Management](#free-space-management)
+    - [FS Efficiency and Performance](#fs-efficiency-and-performance)
+    - [Recovery](#recovery)
+    - [Example WAFL FS](#example-wafl-fs)
+  - [Chapter 15 - File-System Internals](#chapter-15---file-system-internals)
 
 Notacion:
 
@@ -4050,3 +4063,307 @@ informacion. Por lo general *shared memory* se implementa memory-mapping files.
 ![](img-silver/13-fs-overview/mmap-shared-mem.png)
 
 ## Chapter 14 - File-System Implementation
+
+Objetivos:
+
+- Detalles de implementar un local file system y estructuras de directorios.
+- Block allocation, free block algorithms y trade-offs
+- Eficiencia y problemas de performance del FS
+- Recovery de fallos
+- WAFL
+
+### FS Structure
+
+(!) La mayoria de los FS residen en storage secundario, que esta diseñado para
+almacenar una cantidad grande de datos permanentemente. El medio mas comun es el
+disco, pero tambien se usan NVM devices (SSD)
+
+Para mejorar la eficiencia del IO, los transfers se hacen en **bloques**, que
+suelen ser de 4KB.
+
+Los FS se suelen estructurar en capas, lo que permite que el código de las capas
+inferiores se reutilice entre file systems. Pero peude introducir overhead.
+
+(!) Los FS se suelen implementar de forma layered o modulares. Los niveles bajos
+lidian con las propiedades fisicas de los dispositivos de almacenamiento y se
+comunican con ellos. Los niveles mas altos lidian con nombres simbolicos de
+archivos y las propiedades logicas de ellos.
+
+![](img-silver/14-fs-impl/layered.png)
+
+- **IO Control**: Device drivers e interrupt handlers para transferir info de
+  memoria al disco.
+- **Basic file system** (block IO subsystem en Linux) hace reads y writes en el
+  storage device, y se encarga del scheduling de IO.
+- **File organization module**: Sabe de archivos y sus bloques logicos. Se
+  encarga del trackeo de bloques libres
+- **Logical file system**: Maneja metadata (todo menos el contenido de los
+  files). Mantiene estructura de archivos mediante **file control blocks
+  (FCBs)** (**inodes** en UNIX).
+
+Ejemplos:
+
+- Unix: UFS (Unix File System)
+- Windows: FAT, FAT32, NTFS (Windows NT FS)
+- Linux: Soporta muchos, pero el standard es ext (extended file system), ext3,
+  ext4.
+
+(!) Los dispositivos de storage se segmentan en *particiones* para controlar el
+uso de media y permitir multiples FS en el mismo device. Estos se *montan* en
+una arquitectura de file system logica para que puedan ser usados.
+
+### FS Operations
+
+Habla de las estructuras de datos usadas para implementar las operaciones
+soportadas por el file system.
+
+- **Boot control block**
+- **Volume control block**
+- Directory structure
+- Per file FCB
+
+  ![](img-silver/14-fs-impl/fcb.png)
+
+In memory:
+
+- **Mount table**
+- In memory dir structure cache
+- System wide open file table
+- Per process open file table
+
+Las tablas de open files tienen **file descriptors** (unix) o **file handles**
+(windows)
+
+![](img-silver/14-fs-impl/fs-structures.png)
+
+### Directory Implementation
+
+Eleccion de algoritmos para directory allocation y management.
+
+(!) Las rutinas de manejo de directorios deben considerar eficiencia,
+performance y reliability. Se suele usar un hash table ya que es rapido y
+eficiente, pero un daño a esa tabla o un crash del sistema puede causar una
+inconsistencia entre la información de un directorio y el contenido en el disco.
+
+- **Linear list**: Una lista de nombres de archivos con punteros a los bloques
+  de datos. Es facil de implementar pero es O(n) para busquedas.
+
+- **Hash table**: Se explica solo
+
+### Allocation Methods
+
+(!) Los archivos dentro de un FS pueden tener asignado espacio en el storage
+secundario de tres formas: contiguous, linked o indexed. Lo mas comun es que un
+FS use uno solo.
+
+#### Contiguous Allocation
+
+![](img-silver/14-fs-impl/contiguous-allocation.png)
+
+Cada archivo ocupa un set de bloques contiguos en el dispositivo. Minimiza los
+seeks para HDDs. No se usa en FS modernos.
+
+Para dar un bloque libre, se suele usar first fit o best fit en vez de worst
+fit. El problema es el mismo que [Contiguous Memory
+Allocation](#contiguous-memory-allocation)
+
+(!) Puede sufrir de fragmentacion externa, cuando el espacio libre esta partido
+en pedazos. Es un problema cuando el cacho mas grande contiguo no es suficiente
+para un request.
+
+Un esquema posible para **compactar** y degragmentar es pasar ida y vuelta el FS
+de un disco a otro, de esa forma asignando el espacio contiguo devuelta. Pero
+cuesta mucho. Se puede hacer offline con el FS no montado.
+
+Otro problema es que no siempre se sabe a priori el espacio que va a tomar un
+file.
+
+(!) Se puede optimizar aumentando el espacio mediante *extents* para mayor
+flexibilidad y menor fragmentacion externa. Se comienza por asignar un bloque
+contiguo de espacio. Si este no alcanza, se agrega un **extent**, un cacho
+extra. Los bloques de un archivo entonces es el lugar a donde esta el primero y
+un link al primer bloque del extent.
+
+#### Linked Allocation
+
+![](img-silver/14-fs-impl/linked-alloc.png)
+
+Solventa todos los problemas del contiguous allocation. Cada file es una lista
+enlazada de bloques, que pueden estar en cualquier lado del device. Los
+directorios entonces contienen un puntero al primero y ultimo de cada una.
+
+No hay fragmentacion externa, no hace falta compactar, y los files pueden tener
+cualqueir tamaño que puede crecer con el tiempo.
+
+Problemas:
+
+- (!) Es eficiente para acceso secuencial pero es ineficiente para el acceso
+  directo (O(n) la busqueda). Para cada uno hay que hacer un acceso a disco
+  para ver el puntero al siguiente en el bloque.
+
+- Desperdician espacio para punteros (4 bytes)
+
+  Una solucion es agrupar bloques en **clusters**, y asignar clusters en vez de
+  bloques. Por ej. clusters de 4 bloques, ahi los punteros gastan menos espacio.
+
+- Reliability, los punteros estan dispersos por todo el disco y si se pierde uno
+  o si se usa uno equivocado leiste el file que no es.
+
+Una variacion es usar una **file-allocation table** (FAT). En vez de usar una
+lista enlazada, usar una tabla con los bloques y en cada uno que diga el
+siguiente. Se suele guardar en un espacio fijo al principio de cada volumen.
+
+![](img-silver/14-fs-impl/fat.png)
+
+Puede resultar en muchos seeks si no se cachea, ya que el FAT se guarda al
+principio del volumen.
+
+> Pero al cachearla, puede haber problemas de reliability (inconsistencias) si
+> se cae el sistema antes de bajarla a memoria. (esto por alguna razon no lo
+> nombraba el libro)
+
+Se mejora el random-access time porque el disk head puede encontrar el lugar de
+cada bloque solo leyendo el FAT.
+
+#### Indexed Allocation
+
+Linked allocation soluciona fragmentacion y declaracion de tamaño, pero es
+ineficiente para accesos directos (sin una FAT). Lo solventa llevando todos los
+punteros a un solo lugar: un **index block**.
+
+Cada file tiene su index block, que es un array de punteros a bloques de
+storage.
+
+![](img-silver/14-fs-impl/indexed-alloc.png)
+
+El tamaño del index block determina el tamaño maximo de cada file, entonces para
+files chicos se desperdicia un poco de espacio. Esquemas:
+
+- **Linked**: Un index block es un bloque normal, y estan en una lista enlazada.
+- **Multilevel index**: Variacion de linked, un first-level apunta a
+  second-level index blocks, que apuntan a file blocks. Se puede continuar a mas
+  niveles incrementando el tamaño maximo de archivos.
+
+- **Combined**: Usada en Unix.
+
+  Se guardan los primeros punteros del inodo para apuntar a **bloques
+  directos** (que contienen la data del file). Los siguientes apuntan a
+  **indirect blocks**, el primero a **single indirect block** (un bloque que en
+  vez de contener data contiene direcciones de bloques directos), el segundo a
+  **double indirect blocks** (contiene direcciones de single indirect blocks) y
+  el ultimo de un **triple indirect block**
+
+  ![](img-silver/14-fs-impl/inode.png)
+
+(!) Puede requerir mucho overhead. Se puede hacer en clusters de multiples
+bloques para aumentar el throughput y reducir el numero de *index entries*
+necesarias. Indexar en clusters grandes es parecido a contiguous allocation con
+*extents*.
+
+#### Allocation Performance
+
+Los metodos varian en eficiencia de storage y tiempo de acceso a bloques de
+datos. Para elegir cual usar, depende del uso del sistema. No es lo mismo uno
+que tiene mayoritariamente accesos secuenciales que uno que tiene aleatorios.
+
+### Free Space Management
+
+Reutilizar espacio de archivos borrados. Se mantiene una **free-space list** que
+tiene todos los bloques libres, no asignados a un file o directorio. Para crear
+un archivo se busca ahi uno libre y se saca de la lista. Cuando se borra, se
+agrega. A pesar de su nombre, no necesariamente se implementa con una lista.
+
+(!) Los metodos de free-space allocation influencian la eficiencia de uso de
+disco, performance del FS, y reliability del storage secundario.
+
+Metodos:
+
+- **Bit vector** (bitmap): Cada bloque es un bit, 1 si esta libre 0 si esta
+  asignado. Es ineficiente si no esta en memoria principal, lo que es poco
+  practico.
+
+- **Linked list**: Otro approach es linkear los bloques libres manteniendo un
+  puntero al primero en algun lado. No es eficiente.
+
+  ![](img-silver/14-fs-impl/free-linked.png)
+
+Optimizaciones a linked list:
+
+- **Grouping**: Modificacion de la lista, guarda las direcciones de los primeros
+  n bloques libres en el primer bloque libre. El ultimo contiene de los
+  siguientes n y asi.
+
+- **Counting**: Aprovecha el hecho de que por lo general se liberan o asignan
+  bloques contiguos en simultaneo. Se guarda el address de un bloque y la
+  cantidad (count) de bloques seguidos libres. Se pueden guardar en un arbol
+  balanceado en vede una lista para mejor eficiencia.
+
+- **Space maps**: Usado por **ZFS** de oracle.
+- **TRIMing unused blocks**: Para los dispositivos que no permiten hacer
+  overwrite, son necesarios procesos que los liberen.
+
+### FS Efficiency and Performance
+
+(!) Por el rol fundamental que cumplen los FS en la operacion del sistema, es
+crucial su performance y reliability. Se usan log structures y caching para
+mejorar la performance, y log structures / RAID para reliability.
+
+No parece importante, mas en el libro.
+
+### Recovery
+
+Los archivos y directorios se almacenan en memoria principal y en el volumen de
+storage, y es importante que fallas en el sistema no lleven a perdida de datos o
+inconsistencias.
+
+- **Consistency checking**
+
+  Sin importar cual sea la causa de la corrupcion, se deben detectar. Se podria
+  hacer viendo toda la metadata de todo el FS pero seria lento, entonces se pone
+  un bit de consistencia en cada archivo, que al terminar una operacion se pone
+  en 0. Si esta en 1, se corre un **consistency checker**.
+
+  (!) Un *consistency checker* (`fsck` en Unix) se puede usar para reparar
+  estructuras del FS dañadas. Intenta de reparar inconsistencias que encuentre.
+  La cantidad de cosas que puede hacer estan dictadas por el allocation y
+  free-space management algorithms.
+  
+  > Dato curioso del libro: Algunos NVM devices tienen una bateria o
+  > supercapacitor para hacer writes de los buffers del device al storage para
+  > que nopierda data.
+
+- **Log-Structured File Systems** (journaling). Originalmente sacados de bases
+  de datos. Todos los cambios a metadata se escriben secuencialmente a un log
+  (se *commitean*) y la syscall retorna al usuario. Mientras tanto, se aplican
+  los log entries a las estructuras de FS.
+
+  El log file es un **circular buffer**, que escribe al final y continua al
+  principio, sobreescribiendo valores viejos.
+
+  Cuando el sistema crashea, se hacen los log entries pendientes desde el
+  puntero que indica el ultimo que se hizo. El problema es cuando no se llega a
+  commitear antes del crash.
+
+  Tambien aumenta el performance de las metadata-oriented operations (create,
+  delete) en las HDDs, porque es mas rapido hacer escrituras secuenciales sync
+  al log file y async random, que hacer directamente las random.
+
+- **Other solutions**: Snapshots, mas en el libro.
+
+- **Backup and Restore**
+
+  (!) Tools de backup del SO permiten que se copie la data a otro storage,
+  permitiendo que el usuario se recupere de perdida de data o de un dispositivo
+  entero por fallas del HW, bugs del SO, o error de usuario (`rm -rf /`)
+
+  Tambien habla de **full backups** e **incremental backups**.
+
+### Example WAFL FS
+
+(!) Es un ejemplo de optimizacion de performance para matchear un IO load
+especifico.
+
+WAFL: **write-anywhere file layout**. Se usa para file systems distribuidos,
+NFS, CIFS, ftp, etc. Mas en el libro
+
+## Chapter 15 - File-System Internals
