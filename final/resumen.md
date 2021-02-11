@@ -88,6 +88,13 @@
     - [Caracteristicas avanzadas](#caracteristicas-avanzadas)
     - [Performance](#performance)
     - [NFS](#nfs)
+  - [8 - Proteccion y Seguridad](#8---proteccion-y-seguridad)
+    - [Crypto](#crypto)
+      - [Firma digital](#firma-digital)
+    - [Representacion de permisos](#representacion-de-permisos)
+    - [Buffer overflows](#buffer-overflows)
+    - [Mecanismos de proteccion](#mecanismos-de-proteccion)
+    - [Controles de parametros](#controles-de-parametros)
 
 ## Bibliografia
 
@@ -1689,3 +1696,181 @@ hay alternativas para evitar hacerlo de forma parcial o total
 ### NFS
 
 Leer del libro
+
+## 8 - Proteccion y Seguridad
+
+- Proteccion: Mecanismos para que nadie pueda usar los datos de otro. Que
+  usuario puede hacer cada cosa.
+- Seguridad: Asegurarse de quien dice ser cierto usuario, lo sea. Impedir
+  tambien la destruccion o adulteracion de los datos.
+
+La distincion puede ser un poco tirada de los pelos asi que nosotros no la
+hacemos, pero algunos ambientes academicos si.
+
+Como una definicion mas moderna, la *seguridad de la información* se entiende como preservar:
+
+- Confidencialidad
+- Integridad
+- Disponibilidad
+
+Los protagonistas en los sistemas de seguridad suelen ser *sujetos*, *objetos* y
+*acciones*. La idea es decir que sujetos pueden realizar que acciones sobre que
+objetos. El sujeto por lo general es un usuario. Los usuarios se suelen agrupar
+en *grupos* que tambien son sujetos. Ademas se les suelen asignar roles.
+
+Triple A:
+
+- Authentication: Quien decis ser
+- Authorization: Que podes hacer
+- Accounting (auditoria): dejar registrado lo que se hace
+
+### Crypto
+
+La **criptografia** es una rama de la matematica e informata que se ocupa de
+cifrar/descifrar info usando metodos y tecnicas que permiten el intercambio de
+mensajes tal que solo puedan ser leidos por las personas a las que van
+dirigidos.
+
+El **criptoanalisis** no es lo mismo, sino que se encarga de romper lo que logra
+cripto.
+
+Tipos:
+
+- **Simetrico**: La misma clave que uso para encriptar me sirve para desencriptar.
+  Ej: Caesar, DES (Data Encryption Standard), Blowfish, AES.
+
+- **Asimetrico**: usan claves distintas para encriptar y desencriptar. El mas
+  famoso es **RSA**.
+
+  La clave publica la puede conocer cualquier persona. Requiere factorizar un
+  numero en sus componentes primos, lo cual es NP-completo.
+
+  La clave privada es de cada receptor, por cada persona que te comunicas
+  generas un par de claves publica y privada.
+
+  Para encriptar un mensaje, interpreto cada letra como si fuera un numero y
+  hago una cuenta con la clave publica del receptor. Para descifrarlo es
+  necesaria la privada.
+
+  Cualquier mecanismo de encripcion usa RSA como parte, y se suele combinar con
+  simetricas.
+
+- Funciones de **hash** one way: MD5, SHA1, SHA-256
+
+  Lo hasheado no es facil de volver a entender que valor era (salvo por fuerza
+  bruta). Deben cumplir con:
+
+  - Resistencia a la preimagen. Dado h deberia ser dificil encontrar m tal que h
+    = hash(m)
+  - Resistencia a la segunda preimagen: Deberia ser dificil encontrar
+    colisiones.
+  
+  Son muy utiles para almacenar contraseñas de los usuarios, pero se debe usar
+  *salts* (como numeros al azar para después hasharlos juntos) e iterarlo varias
+  veces.
+
+#### Firma digital
+
+Para saber que alguien firmo un documento.
+
+- Calculo el hash del documento
+- Encripto con mi clave privada
+- Entrego el documento y el hash encriptado (la firma)
+
+La persona que recibe,
+
+- Hashea el documento, deberia obtener el mismo hash que el que firmo.
+- Desencripta con la publica. Si da lo mismo, el unico que puede haber
+  encriptado es el dueño de la privada, y se valida la firma.
+
+En la practica los *key servers* tienen las claves publicas de la gente.
+
+### Representacion de permisos
+
+La forma mas facil de realizar autorizacion es una matriz de sujetos x objetos
+de control de accesos. En las celdas figuran las acciones permitidas. Pero que
+pasa cuando se crea un objeto nuevo?
+
+- **DAC**: Discretionary Access Control, el dueño decide los permisos de
+  seguridad de cada objeto explicitamente.
+
+  En Unix los permisos de los archivos son DAC. `SETUID` y `SETGID` son permisos
+  de acceso que se asignan a archivos o directorios en un SO. Se suelen usar
+  para permitir que usuarios ejecuten binarios con privilegios elevados
+  temporalmente para una tarea especifica. Si un archivo tiene activado el bit
+  `SETUID` se idntifica con una `s` en `ls`
+
+  ```text
+  -rwsr-xr-x 1 root shadow 27920 ago 15 22:45 /usr/bin/passwd
+  ```
+
+- **MAC**: Mandatory Access Control, se usa para manejar informacion muy
+  sensible. Cada sujeto tiene un grado o nivel, y los objetos heredan el grado
+  del ultimo sujeto que los modifico. Un sujeto solo puede acceder a objetos de
+  grado menor o igual que el de el.
+
+  Un ejemplo es *Windows Integrity Control*, que define cuatro niveles de
+  integridad: System, High, Medium (nivel por defecto) y Low. Todos los
+  archivos, carpetas, usuarios y procesos tienen niveles de integridad.
+
+### Buffer overflows
+
+Cuando se invoca una función en c, primero se hace push de los parametros y el
+IP a la pila, y las variables locales reservan espacio en la pila.
+
+```c
+void f(char* origen) {
+  char buffer[16];
+  strcpy(buffer, origen);
+}
+
+void main(void) {
+  char grande[18];
+  f(grande);
+}
+```
+
+| Antes de `strcpy`                       | Despues                                |
+| --------------------------------------- | -------------------------------------- |
+| ![](img/seginf/buf-overflow-before.png) | ![](img/seginf/buf-overflow-after.png) |
+
+Se piso el IP. Esta es stack based pero tambien hay heap based. Hay distintas
+formas de detectarlo e intentar prevenirlo
+
+### Mecanismos de proteccion
+
+Algunos SOs implementan uno o mas mecanismos para protegerse de posibles
+ataques, como
+
+- `DEP`: Data Execution Prevention
+  
+  Ninguna region de memoria deberia ser al mismo tiempo escribible y ejecutable.
+  Se implementan con ayuda del hardware, por ej mediante el bit NX en intel.
+  Impide ataques basicos como los que aparecen aqui.
+
+  Es bypasseable (ROP)
+
+- `ASLR`: Address Space Layout Randomization
+
+  Modifica de manera aleatoria la direccion base de regiones importantes de
+  memorientre diferentes ejecuciones de un proceso. Por ej del heap, stack,
+  libc, etc.
+
+  Impide ataques que utilizan direcciones hardcodeadas. Y no todo se randomiza,
+  por lo general, la seccion de text no cambia, y para que lo haga, se tiene que
+  compilar especialmente para ser *Position Independent Executable* (PIE).
+
+  Es bypasseable.
+
+- `Stack Canaries`: Tambien Stack Guards o Stack Cookies
+
+  Se implementa a nivel compilador. Se coloca un valor en la pila luego de crear
+  el stack frame (canary) el cual se verifica antes de retornar de la funcion.
+
+  La idea es proteger el valor de retorno de la funcion de buffer overflows.
+
+### Controles de parametros
+
+Cuando no se valida el input y se termina haciendo algo que no debia, como un
+sql inyection o un rm -rf en un `system`.
+
