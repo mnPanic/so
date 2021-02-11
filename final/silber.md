@@ -204,6 +204,20 @@
     - [Recovery](#recovery)
     - [Example WAFL FS](#example-wafl-fs)
   - [Chapter 15 - File-System Internals](#chapter-15---file-system-internals)
+    - [File System Types](#file-system-types)
+    - [FS Mounting](#fs-mounting)
+    - [Partitions and Mounting](#partitions-and-mounting)
+    - [File Sharing](#file-sharing)
+    - [Virtual File Systems](#virtual-file-systems)
+    - [Remote File Systems](#remote-file-systems)
+      - [Failure Modes](#failure-modes)
+    - [Consistency Semantics](#consistency-semantics)
+    - [NFS](#nfs)
+      - [Mount protocol](#mount-protocol)
+      - [NFS Protocol](#nfs-protocol)
+      - [Path-Name Translation](#path-name-translation)
+      - [Remote operations](#remote-operations)
+- [Part seven - Security and Protection](#part-seven---security-and-protection)
 
 Notacion:
 
@@ -4367,3 +4381,264 @@ WAFL: **write-anywhere file layout**. Se usa para file systems distribuidos,
 NFS, CIFS, ftp, etc. Mas en el libro
 
 ## Chapter 15 - File-System Internals
+
+Estructuras y operaciones de los FS.
+
+Objetivos:
+
+- Detalles de FS y sus implementaciones
+- Booting y file sharing
+- Remote file systems
+
+### File System Types
+
+(!) Los SOs de proposito general proveen muchos tipos de file systems, de
+proposito especifico a general.
+
+Una computadora puede tener multiples storage devices, que pueden dividirse en
+particiones, que tienen volumenes, en donde se almacenan los file systems.
+Dependiendo del *volume manager*, un volumen podria tambien estar en varias
+particiones.
+
+![](img-silver/15-fs-internals/storage-device-org.png)
+
+Una computadora tambien podria tener varios FS de tipos diferentes
+
+Hay muchos FS de proposito especifico, por ejemplo en solaris:
+
+- `tmpfs`: FS temporal que se crea en RAM
+- `objfs`: Virtual FS (interfaz al kernel que se parece a un file system) que le
+  da a los debuggers acceso a simbolos de kernel
+- `ctfs`: Virtual FS que mantiene contract info para manejar que procesos
+  arrancan cuando el sistema bootea y deben seguir corriendo.
+- `lofs`: Loop back FS que permite que un file system se acceda en lugar de
+  otro.
+- `procfs`: Virtual file system que presenta info de todos los procesos como un
+  file system.
+- `ufs, zfs`: de proposito general
+
+### FS Mounting
+
+Tal como un archivo debe ser abierto antes de usado, un file system debe ser
+**mounted** antes de estar disponible al resto de los procesos del sistema. La
+estructura de directoriso puede estar construida por multiples volumenes que
+contienen file systems, que deben ser montados para que esten disponibles en el
+file-system name space.
+
+Para montar, al SO se le da el nombre del device y el **mount point** (el lugar
+en el file structure donde se attachea el file system). Tipicamente es un
+directorio vacio. Luego verifica que sea un file system valido. Finalmente el SO
+puede recorrer su estructura de directorios.
+
+![](img-silver/15-fs-internals/mount-pre.png)
+![](img-silver/15-fs-internals/mount-post.png)
+
+Si se desmonta el volumen, vuelve a la figura 15.3. Los sistemas imponen
+*semanticas* para clarificar la funcionalidad, podrian no dejar montar sobre un
+directorio que contiene archivos, o hacer que lo permita y esconda lo previo
+montado. Tambien podria dejar que se monte mas de una vez en diferentes mount
+points o dejar un mount por file system.
+
+### Partitions and Mounting
+
+El layout de un disco puede tener muchas variaciones dependiendo del SO y el
+software de manejo de volumenes. Puede estar dividido en varias particiones (en
+lo que se concentra el capitulo), o un volumen puede extenderse sobre varias (lo
+que es una forma de RAID y ya se vio).
+
+Cada particion puede ser "raw" (sin FS) o "cooked" (con fs). **Raw disk** se usa
+cuando no hay un file system que sea apropiado, por ejemplo con el swap space de
+UNIX o algunas bases de datos.
+
+Si una particion es booteable, debe tener boot information. No tiene el formato
+del file system porque no hay informacion de el en esa etapa, sino que es una
+serie de bloques que se cargan como una imagen a memoria, un **bootstrap
+loader**. Este sabe suficiente del FS para encontrar y cargar el kernel para que
+ejecute. Este puede contener instrucciones para bootear mas de uno, como cuando
+hay **dual-boot**.
+
+La **root partition** se selecciona por el boot loader, que contiene el kernel y
+se monta en boot time. En runtime se pueden montar mas automatica o manualmente,
+dependiendo del SO.
+
+Windows monta cada volumen en un namespace separado, denotado por una letra y
+dos puntos (`C:`, `D:`, etc.). En Unix, los FS se pueden montar en cualquier
+directorio. Se implementa flageando al inodo del directorio como mount point, y
+se agrega a la mount table (que contiene un puntero al superblock del FS en ese
+device.)
+
+(!) Dependiendo del SO, el file system space es **seamless** (los FS montados
+estan integrados en la estructura de directorios) o **distinct** (cada FS
+montado tiene su propia *designation*)
+
+(!) Al menos un file system debe ser bootable para que el sistema pueda
+arrancar, debe contener un SO. El *boot loader* se corre primero (un programa
+simple que encuentra el kernel en el FS, lo carga y comienza su ejecucion).
+Puede haber mas de una particion bootable, y el administrador elige cual correr
+at boot time.
+
+(!) Las mass storage partitions se usan o para *raw block IO* o file systems.
+Cada file system reside en un volumen, que puede estar compuesto de una o mas
+particiones trabajando en conjunto mediante un volume manager.
+
+### File Sharing
+
+(!) La mayoria de los sistemas son multi-usuario y deben proveer un metodo de
+compartir archivos y proteccion de ellos. Los archivos y directorios suelen
+contener metadata, como owner, user y group access permissions.
+
+### Virtual File Systems
+
+(!) Para simplificar la implementacion de multiples file systems, un SO puede
+usar un approach layered, con un **virtual file system interface** que hace
+posible acceder a diferentes FS de manera seamless.
+
+![](img-silver/15-fs-internals/vfs-schema.png)
+
+El primer layer es el file system interface, que tiene llamadas de `open`,
+`read`, `write` y `close` en file descriptor. La segunda es el **virtual file
+system (VFS)** layer, que cumple dos funciones
+
+1. Separa operaciones genericas de un FS de su implementacion mediante una
+   interfaz de VFS. Diferentes implementaciones pueden coexistir en la misma
+   maquina, permitiendo acceso transparente a distintos FS montados localmente.
+
+2. Provee una forma de representar unicamente un archivo en una red, con un
+   **vnode**, que tiene un ID unico. Es requerida para tener network file
+   systems.
+
+La capa que implementa la interfaz es la tercera.  
+
+### Remote File Systems
+
+Los metodos para compartir archivos a traves de la red fueron evolucionando. Los
+primeros fueron transferir archivos manualmente a traves de programas como
+`ftp`. Lo segundo usa un **distributed file system** (**DFS**). Y el tercero,
+**World Wide Web** requiere un browser para acceder a los archivos remotos, y
+operaciones separadas (wrappers de ftp esencialmente).
+
+`ftp` hace **anonymous access** (cuando puede transferir archivos sin tener una
+cuenta en el sistema remoto) y authenticated access.
+
+Los remote file systems dejan que una maquina monte uno o mas FS de una o mas
+maquinas remotas.
+
+- **Client-Server**
+
+  El **server** tiene los achivos y el que los busca es el **cliente**.
+  El cliente puede o no estar autenticado. Una vez que se autentica es como una
+  interaccion normal con un file system local pero a traves de la red usando el
+  protocolo NFS.
+
+- **Distributed information systems**
+
+  (!) Client-server no comparte informacion de forma nativa, pero un **sistema
+  de informacion distribuido** como **DNS** (*domain name system*) se puede usar
+  para permitirlo, proveyendo un user name space unificado, manejo de passwords
+  y system identification. Por ejemplo, Microsoft CIFS usa *active directory*,
+  que usa una version del protocolo Kerberos network authentication para proveer
+  servicios de naming y autenticacion a un conjunto de computadoras en una red.
+
+  **LDAP** (**lightweight directory-access protocol**) es mecanismo seguro y
+  distribuido de naming. La mayoria de los SOs lo incluyen y permiten que se use
+  para toda la autenticacion de usuarios y system-wide retrieval of info.
+
+  Un directorio distribuido de LDAP se podria usar por una org. para guardar
+  toda la info de usuarios y recursos para todas las computadoras.
+
+#### Failure Modes
+
+Los FS locales pueden fallar por varias razones, y los FS remotos tienen aun mas
+por la complejidad de la red. Las *failure semantics* se definen como parte del
+protocolo de remote file system, que hace ante fallas (para las operaciones?
+espera? reintenta? etc.)
+
+### Consistency Semantics
+
+(!) Una vez que se pueden compartir archivos, un modelo de **consistency
+semantics** debe ser elegido e implementado para moderar multiples accesos
+concurrentes al mismo archivo. Especifican cuando modificaciones de datos por un
+usuario van a ser *observables* por los otros usuarios.
+
+Se asume que los reads, writes a un mismo file por un usuario siempre estan
+entre `open` y `close`. Estos componen un **file session**.
+
+- **Unix semantics**
+- **Session semantics**
+- **Immutable-shared-files semantics**
+
+### NFS
+
+(!) NFS es un ejemplo de un *remote file system*, provee a sus clientes con
+seamless access a directorios, files y FS enteros. Un full-featured remote file
+system incluye un protocolo de comunicacion con operaciones remotas y path-name
+translation.
+
+Aca se explica NFS v3 (stateless), no v4 (stateful).
+
+La idea de NFS es permitir que un conjunto de file systems en computadoras
+independientes se puedan compartir. Esto se hace a traves de una relacion
+client-server, en la que una maquina puede ser cualquier  de las dos o ambas.
+
+Para que un directorio remoto sea visible la computadora debe hacer un mount de
+un directorio remoto sobre uno local. Esto pisa el directorio local que habia
+ahi previamente, que deja de ser visible.
+
+![](img-silver/15-fs-internals/nfs-example-mount.png)
+
+Mounting a) `s1:/usr/shared` over `U:/usr/local`.
+
+Tambien se pueden hacer *cascading mounts*, un file system que se monta sobre
+otro remoto (pero no es transitivo). Ilustrado en b), mounting `s2:/usr/dir2`
+over `U:/user/local/dir1`
+
+![](img-silver/15-fs-internals/nfs-mounting-2.png)
+
+Hay dos especificaciones de NFS, un mount protocol y un **NFS Protocol** (para
+acceso a archivos remotos). Ambos son especificados como sets de RPCs (remote
+procedure calls)
+
+#### Mount protocol
+
+El **mount protocol** establece la conexion logica inicial entre un server y un
+client. El servidor mantiene una **export list** que dice que local FS exporta
+para montar, y las maquinas que tienen permitido montarlos.
+
+#### NFS Protocol
+
+Soporta las siguientes RPCs, que se pueden invocar solo luego de haber obtenido
+el file handle del directorio remoto montado.
+
+- Buscar un file en un dir
+- Leer dir entries
+- Manipular links y dirs
+- Acceder a file attrs
+- Read / write files
+
+No hay open y close porque son stateless. Las requests son **idempotentes** (la
+misma operacion hecha mas de una vez tiene el mismo efecto que si se hubiera
+hecho una sola) para que sea facil recuperarse luego de un crash.
+Para implementarlo cada NFS request tiene un numero de secuencia
+
+Como los requests tienen tamaño limitado, si escriben mucha data
+concurrentemente puede estar interleaved, pero como locking es inherentemente
+stateful, se tiene que brindar de afuera.
+
+![](img-silver/15-fs-internals/nfs-arch.png)
+
+#### Path-Name Translation
+
+**Path-name translation** en NFS consiste en el parseo de un path como
+`/usr/local/dir1/file.txt` a dir entries (o componentes) separados. (`usr`,
+`local` y `dir1`). Se hace un NFS `lookup` diferente para cada par de nombre de
+componente y dir vnode. Cada vez que se cruza un mount point, se hace un RPC
+separado al servidor.
+
+Esto se cachea.
+
+#### Remote operations
+
+Hay una relacion casi 1 a 1 de syscalls para file operations y los RPCs de NFS.
+Pero no es tan asi porque hay cacheo local en el medio.
+
+# Part seven - Security and Protection
