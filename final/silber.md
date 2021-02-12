@@ -218,6 +218,25 @@
       - [Path-Name Translation](#path-name-translation)
       - [Remote operations](#remote-operations)
 - [Part seven - Security and Protection](#part-seven---security-and-protection)
+  - [Chapter 16 - Security](#chapter-16---security)
+    - [The Security Problem](#the-security-problem)
+    - [Program Threats](#program-threats)
+      - [Malware](#malware)
+      - [Code Injection](#code-injection)
+      - [Viruses and Worms](#viruses-and-worms)
+    - [System and Network Threats](#system-and-network-threats)
+    - [Cryptography as a Security Tool](#cryptography-as-a-security-tool)
+      - [Encryption](#encryption)
+        - [Symmetric Encryption](#symmetric-encryption)
+        - [Asymmetric Encryption](#asymmetric-encryption)
+        - [Authentication](#authentication)
+        - [Key Distribution](#key-distribution)
+      - [Implementation of Cryptography](#implementation-of-cryptography)
+      - [Example: TLS](#example-tls)
+    - [User Authentication](#user-authentication)
+    - [Implementing Security Defenses](#implementing-security-defenses)
+    - [Example: Windows 10](#example-windows-10)
+  - [Chapter 17 - Protection](#chapter-17---protection)
 
 Notacion:
 
@@ -4642,3 +4661,490 @@ Hay una relacion casi 1 a 1 de syscalls para file operations y los RPCs de NFS.
 Pero no es tan asi porque hay cacheo local en el medio.
 
 # Part seven - Security and Protection
+
+La **seguridad** asegura la autenticacion de usuarios del sistema para proteger
+la integridad de la informacion almacenada (data y codigo) y los recursos
+fisicos del sistema. Previene accesos no autorizados, alteracion o destruccion
+maliciosa de data, y introduccion accidental de incosnstencias.
+
+Los mecanismos de **proteccion** controlan acceso a un sistema limitando el tipo
+de accesos a archivos permitidos a los usuarios. Ademas deben asegurar que solo
+los procesos que tienen autorizacion del SO operen en segmentos de memoria, CPU
+y otros recursos. Se provee por un mecanismo que controla el acceso de
+programas, procesos o usuarios a recursos definidos por un sistema. Debe proveer
+una forma de especificar los controles a imponer, y una forma de enforzarlos.
+
+## Chapter 16 - Security
+
+Seguridad es una medida de confianza que la integridad de un sistema y sus datos
+se preserven. Proteccion son los mecanismos que controlan el acceso de procesos
+y usuarios a los recursos.
+
+Objetivos:
+
+- Security threats and attacks
+- Fundamentos de encripcion, authentication y hashing
+- Usos de crypto en computing
+- Contramedidas a ataques de seguridad.
+
+### The Security Problem
+
+(!) Mientras que la proteccion es un problema *interno*, la securidad debe
+considerar tanto al sistema como al entorno en el cual se usa.
+
+Un sistema es **seguro** si sus recursos son accedidos y usados siempre como
+deberian. No se puede asegurar pero se puede hacer que los security breaches
+sean muy raros. Las violaciones de seguridad pueden ser *itencionales*
+(maliciosas, mas dificiles de proteger) y *accidentales* (mas faciles de
+proteger, por lo general con mecanismos de proteccion (chap. 18)). Security
+violations:
+
+- **Breach of confidentiality**: Unauthorized read of data.
+- **Breach of integrity**: Unauthorized modification of data.
+- **Breach of availability**: Unauthorized destruction of data.
+- **Theft of service**: Unauthorized use of resources.
+- **Denial of service** (DOS): Prevenir uso legitimo del sistema.
+
+Ataques comunes:
+
+- **masquerading**: Un participante en una comunicacion pretende ser alguien
+  mas, autenticandose como ellos.
+- **replay attack**: Se repite data maliciosamente hasta que se trasmita de
+  forma valida. Se suele hacer con **message modification**, cambia data en una
+  comunicacion sin que el que la envio sepa.
+- **man-in-the-middle attack**: Un atacante se pone en el medio de una
+  comunicacion, masquerading como el sender y el receiver, haciendo un **session
+  hijack**.
+- **privilege escalation**: Mas permiso del que se supone que tengan.
+
+Para proteger el sistema, se deben tomar medidas de seguridad en 4 niveles:
+
+1. **Fisico**: Los lugares que contienen los sistemas deben estar fisicamente
+   asegurados de intrusos.
+2. **Network**: Para que no intercepten la comunicacion.
+3. **SO**: El **attack surface** es el set de puntos en el cual un atacante
+   puede intentar de entrar al sistema.
+4. **Application**: Es imposible asegurar que todas las aplicaciones son
+   seguras.
+5. Humano: phishing, social engineering
+
+![](img-silver/16-security/4-layer-model.png)
+
+El modelo de 4 capas es como una cadena de enlaces, un problema en uno puede
+comprometer a todo el sistema. "Security is only as strong as its weakest link."
+
+### Program Threats
+
+(!) Se pueden lanzar muchos tipos de ataques contra programas y contra
+computadoras o conjuntos de ellas. Stack y buffer overflows permiten que cambien
+el nivel de acceso al sistema. Viruses y malware requieren interaccion humana,
+mientras que los worms son self-perpetuating, infectando muchas computadoras.
+Denial-of-service previene uso legitimo de los sistemas afectados.
+
+Como un SO ejecuta procesos, son el vector de ataque mas comun. Aunque un
+usuario se pueda loguear, incluso puede dejar un **Remote Access Tool** (RAT).
+
+#### Malware
+
+**Malware** es software diseñado para exploit, deshabilitar o dañar sistemas.
+
+- Trojan horse: Un programa que ejecuta de una forma maliciosa en vez de como
+  dice que deberia. Un *trojan mule* es aquel que se hace pasar por un login
+  pero te roba los datos.
+- Spyware: Suele acompañar un programa instalado por el usuario. Roba
+  informacion o usa recursos del host para enviar, por ej. spam.
+- Ransomware: Encripta toda o parte de la info y la hace inaccesible. La idea es
+  que pague un ransom para recuperarla.
+- Trap door (backdoor): No chequear ciertas cosas para ciertos usuarios. Es un
+  **logic bomb** si solo opera en ciertas situaciones, lo que lo hace mas
+  dificil de detectar. Se puede prevenir con code reviews.
+
+Por lo general el malware brilla cuando se viola el **principio de minimo
+privilegio**: cada programa y usuario privilegiado del sistema deberia operar
+usando el minimo privilegio necesario para completar la tarea. De esta manera,
+se reduce el numero de interacciones potenciales entre programas privilegiados
+al minimo necesario para operar correctamente, asi uno tiene confianza de que no
+hay usos indebidos de privilegios.
+
+#### Code Injection
+
+La mayoria del software no es malicioso pero puede caer victima a un
+**code-injection attack** en el cual codigo ejecutable se agrega o modifica. Por
+lo general por buffers de memoria corrompidos en lenguajes de bajo nivel (c,
+cpp)
+
+Se suelen hacer mediante un **Buffer overflow**
+
+![](img-silver/16-security/buffer-overflow.png)
+
+`strcpy` solo frena cuando llega a un byte NULL (`\0`), entonces si se da algo
+mas grande que `BUFFER_SIZE` se pisa la memoria, pero el outcome depende
+
+![](img-silver/16-security/buf-overflow-outcomes.png)
+
+Se puede llegar a pisar el return address yendo a codigo inyectado y
+ejecutando cualquier cosa.
+
+El codigo que se inyecta se suele llamar **shellcode**, porque usualmente el
+codigo compilado que se inyectaba era aquel que spawneaba un shell
+
+```c
+void func(void) {
+  execvp("/bin/sh", "/bin/sh", NULL);
+}
+```
+
+![](img-silver/16-security/shellcode.png)
+
+Se suele paddear con NOPs para lidiar con alignment, causando un "NOP-sled",
+porque la ejecucion slides down the NOP instructions hasta que llega al
+payload y lo ejecuta.
+
+#### Viruses and Worms
+
+Un **virus** es un fragmento de codigo embebido en un programa legitimo. Son
+self-replicating y estan diseñados para infectar a otros programas. Estos
+requieren actividad humana para iniciarse, de phishing o spam email. Pero los
+**worms** usan a la red para replicarse sin ayuda de los humanos.
+
+Hay diferentes tipos de viruses, que se instalan por un **virus dropper**
+(usualmente un *trojan horse*)
+
+- **File**: Se appendea a un file, cambiando el inicio del programa para que
+  salte a el, y luego retorna al programa original.
+- **Boot**: Afecta el boot sector, ejecuta antes de que el sistema cargue.
+
+  ![](img-silver/16-security/boot-virus.png)
+
+- **Macro**: La mayoria de los viruses se programan low-level, estos en alguno
+  high level. Y se triggerean cuando algun programa capaz de ejecutar el macro
+  corre.
+- **Rootkit**: Llamado asi porque originalmente era para obtener root access
+  facil en sistemas UNIX, pero se refiere a cualquier virus que permite
+  infiltrar al SO.
+
+- **Source Code**: Modifica fuente para incluirse
+- **Polymorphic**: Se cambia cada vez que se instala para no ser detectado por
+  un antivirus, cambia su **signature** (patron usado para identificarlo,
+  tipicamente una serie de bytes) pero no su funcionalidad.
+
+- **Encrypted**
+- **Stealth**
+- **Multipartite**
+- **Armored**
+
+### System and Network Threats
+
+Estar conectado a una red hace que te puedan atacar de cualqueir lado. Los
+sitemas intentan de ser **secure by default** para decrementar la superficie de
+ataque.
+
+![](img-silver/16-security/standard-security-attacks.png)
+
+- Sniffing: Interceptar trafico
+- Spoofing: masquerading
+- man in the middle
+
+Ataques:
+
+- **Denial of Service** (DOS)
+
+  Irrumpe con el uso legitimo de un sistema. Por lo general es imposible
+  prevenirlos, ya que usan los mismos mecanismos que operacion normal. Tambien
+  estan los **Distributed Denial-of-Service (DDoS)** attacks que se lanzan de
+  mas de un lugar a la vez.
+
+- **Port Scanning**: no es un ataque sino una forma de detectar vulnerabilidades
+  a atacar. Fingerprinting: ver que tipo de SO, servicios, etc. el target esta
+  corriendo.
+
+### Cryptography as a Security Tool
+
+(!) La encripcion limita el dominio de receptores de datos, mientras que la
+autenticacion limita el dominio de transmisores. Se usa para proveer confianza a
+datos transferidos o almacenados. La encripcion **simetrica** requiere una clave
+compartida, mientras que la **asimetrica** provee una clave publica y una
+privada. Autenticacion combinada con hashing puede probar que la data no cambio.
+
+Hacer que una red sea confiable (i.e que confias en que el que te mando un
+paquete es quien realmente dice ser y que lo que envias le va a llegar a quien
+queres y a nadie mas) es inviable. La alternativa es eliminar la necesidad de
+que la red sea confiable mediante **criptografia**, que limiuta los receptores y
+transmisores de un mensaje.
+
+Se basa en secretos llamados **keys** que se distribuyen de forma selectiva y se
+usan para procesar mensajes. Se puede asegurar que un mensaje recibido fue
+enviado por una persona que tenia cierta key, y que un mensaje enviado solo lo
+va a poder leer el receptor que tenga una key. Se diseñan (a diferencia de
+direcciones de red como IP) para que sea computacionalmente inviable derivarlas
+de los mensajes generados o cualquier otra info.
+
+#### Encryption
+
+Un algoritmo de **encripcion** asegura al transmisor de un mensaje que solo una
+computadora que posea cierta key va a poder leer el mensaje.
+
+Un algoritmo de encripcion consiste en
+
+- K: Set de keys
+- M: Set de mensajes
+- C: Set de *ciphertexts* (textos cifrados)
+- E: K -> (M -> C): Funcion de encripcion, para cada k en K, E_k mapea de
+  mensajes a ciphetexts, deberia ser eficiente (polinomial). Generalmente es un
+  mapeo randomizado.
+- D: K -> (C -> M) Funcion de desencripcion. Deberia ser poly.
+
+Y debe cumplir con la siguiente propiedad esencial: dado un ciphertext c en C,
+una computadora puede computar m tal que E_k(m) = c solo si posee k. De esa
+forma, una computadora que posee k puede desencriptar ciphertexts al texto plano
+usado para producirlos, pero una que no, no puede.
+
+Como los ciphertexts suelen estar expuestos (a traves de la red) deberia ser
+inviable derivar k de los ciphertexts.
+
+Hay dos tipos principales de algoritmos: symmetric y asymmetric
+
+##### Symmetric Encryption
+
+En un **symmetric encryption algorithm** la misma clave se usa para encriptar y
+desencriptar. La clave debe ser protegida. El intercambio de claves debe suceder
+directamente entre ambas partes mediante un tercero confiable (certificate
+authority.)
+
+![](img-silver/16-security/secure-comm-insec-med.png)
+
+El mas comunmente usado era **data encryption standard (DES)**, que toma un
+64-bit value  un 56-bit key y hace unas erie de transformaciones que se basan en
+sustituciones y permutaciones. Como actua sobre bloques de bits a la vez, se le
+llama un **block cipher**. Como para estandares de computo modernos se considera
+inseguro (se pueden buscar los keys por fuerza bruta) se hizo **tripe DES**, en
+el que se repite tres veces (dos encripciones y una desencripcion) en el mismo
+texto plano usando dos o tres claves. Por ej. $c = E_{k3}(D_{k2}(E_{k1}(m)))$
+
+Uno nuevo es **advanced encryption standard (AES)** (aka Rijndael). Usa claves
+de 128, 192 o 256 bits y funciona en bloques de 128-bits.
+
+Una alternativa a block ciphers son **stream ciphers**, que estan diseñados para
+encriptar o desencriptar streams de bytes en vez de un bloque.
+
+##### Asymmetric Encryption
+
+En un **asymmetric encryption algorithm** hay claves diferentes para encripcion
+y desencripcion. Una entidad preparada para recibir comunicaciones encriptadas
+crea dos claves y disponibiliza una (la *public key*) a todo aquel que se quiera
+comunicar. Cualquiera puede usarla para encriptar, pero solo el que tenga la
+privada (el creador de la publica) puede desencriptarlo. Este esquema se conoce
+como **public-key encryption**. Con esto ya no es necesario compartir la clave
+de forma secreta.
+
+Un ejemplo es **RSA** (Rivest, Shamir and Adelman), es el mas usado. Detalles de
+como funciona en el libro.
+
+##### Authentication
+
+Encripcion ofrece una manera de reducir el set de receptores de un mensaje.
+Restringir el set de potenciales transmisores es **autenticacion**, que por lo
+tanto es complementario a encripcion.
+
+Un algoritmo usando claves simetricas consiste en
+
+- K: Set de claves
+- M: Set de mensajes
+- A: Set de authenticators
+- S: K -> (M -> A): Para cada k en K, S_k es una funcion que genera
+  authenticators de mensajes. Deberian ser computables poly.
+- V: K -> (M x A -> {true, false}), para cada k en K, V_k verifica
+  authenticators de un mensaje. Deberian ser eficientemente computables.
+
+Y la propiedad que debe cumplir es que para un mensaje m, una computadora puede
+generar un authenticator a en A tal que V_k(m, a) = true solo si posee k. Por lo
+tanto, una computadora que tenga k puede generar autenticadores en mensajes para
+que cualquier computadora que lo posea pueda verificarlo. Pero uno que no lo
+posea no puede. Como los authenticators estan expuestos a la red, no debe ser
+viable derivar k de ellos.
+
+Practicamente, si V_k(m ,a) = true, sabemos que m no fue modificado y que el que
+envio el mensaje tiene k.
+
+Hay dos variedades principales de algoritmos de autenticacion. Una **hash
+function** H(m) crea un bloque de tamaño fijo chico de data, conocido como
+**hash value** o **message digest** de un mensaje m. Debe ser collision
+resistant (inviable de encontrar mensajes que colisionen). Si H(m) =
+H(m'), sabemos que m' no fue cambiado. Funciones comunes incluyen **MD5**
+(inseguro, 128-bit hash) y **SHA-1** (160-bit hash). Son utiles para detectar
+cuando un mensaje cambia pero no como authenticators, porque alguien en el medio
+podria cambiarlo y recalcular el hash.
+
+Tipos
+
+- **MAC** (message-authentication code): Usa encripcion simetrica. Se genera un
+  checksum criptografico a partir del mensaje usando una clave secreta. Un MAC
+  provee una manera de autenticar valores cortos de forma segura.
+
+  Si la usamos para autenticar H(m) para un H collision resistant, tenemos una
+  forma de autenticar de forma segura un mensaje largo hasheandolo primero.
+
+- **Digital signature algorithm**: Los authenticators producidos son **digital
+  signatures**. Permiten que *cualquiera* verifique la autenticidad del mensaje.
+
+  Se puede usar por ejemplo RSA digital signature, que invierte el uso de las
+  claves.
+  
+  Se puede usar para otras cosas que no sean mensajes, como **code signing**.
+
+  Son la parte central de **nonrepudiation**: probar que una entidad realizo una
+  accion. Por ejemplo, hacer forms online en vez de contratos en papel.
+
+##### Key Distribution
+
+Una buena parte de la batalla entre cryptographers (los que inventan ciphers) y
+cryptanalysts (los que intentan de romperlos) involucran las claves. En los
+algoritmos simetricos, ambas partes necesitan una clave que debe ser secreta,
+por lo tanto el delivery pasa a ser un desafio.
+
+A veces se hace **out-of-band**, fuera de la red. Y luego tener la conversacion
+de forma electronica. Pero esto no escala.
+
+Incluso la distribucion de public keys requiere cuidado, porque alguien podria
+mandar una suya que matchee su private key y de esa forma pueda desencriptar un
+mensaje.
+
+![](img-silver/16-security/mim-asymm.png)
+
+Necesitamos entonces pruebas de quien es dueño de esa private key. Una forma es
+usando **digital certificates**, son una public key firmada digitalmente por un
+trusted party, una **certificate authority**. Estas se confian entre si creando
+una red de confianza. Estos certificados se pueden distribuir en un formato
+X.509 de certificados digitales que pueden ser parseados por una computadora.
+
+#### Implementation of Cryptography
+
+Los protocolos de red se suelen organizar en *capas*, con cada capa como cliente
+de la capa inferior. Cuando un protocolo genera un mensaje para mandar al
+protocol peer en otra maquina, se lo da al protocolo debajo en el
+network-protocol stack para que se lo envie al peer en esa maquina. Hay 7 capas
+en el modelo OSI.
+
+1. Physical
+2. Data link
+3. Network
+4. Transport
+5. Session
+6. Presentation
+7. Application
+
+> Por ejemplo, en una red IP, TCP (un transport-layer protocol) actua como
+> cliente de IP (network-layer protocol): los paquetes TCP se pasan hacia abajo
+> a IP para que se lo mande al IP peer en el otro lado de la conexion. IP
+> encapsula el paquete TCP en un paquete IP, que se manda al *data-link layer*
+> para ser transmitiro a traves de la red al peer en la computadora destino.
+> Este IP peer entrega el paquete TCP al peer en esa maquina.
+
+La crypto se puede instalar en casi cualquier capa del network protocol stack.
+
+- TLS se pone en el transport-layer.
+- IPSec en el network layer, permite insertar authenticators y encriptar
+  paquetes de IP. Usa cifrado simetrico y el protocolo de **Internet Key
+  Exchange (IKE)** para intercambio de claves. Se usa como base para las
+  **virtual private networks** (VPNs), en las cuales se encripta todo el trafico
+  entre dos endpoints IPSec.
+
+- PGP encripta emails
+
+Y donde es mejor ponerla en un protocol stack? No hay respuesta general.
+
+#### Example: TLS
+
+**Transport Layer Security (TLS)** es un protocolo criptografico que permite que
+dos computadoras se comuniquen de forma segura. Es el mas usado en internet hoy
+en dia, el estandar con el que los web browsers se comunican con web servers.
+
+Mas en el libro
+
+### User Authentication
+
+(!) Los metodos de autenticacion de usuarios se usan para identificar usuarios
+legitimos de un sistema. Lo standard es user y password. Pero hay otros, como
+one-time passwords (para evitar replay attacks), two-factor authentication,
+multifactor authentication (tres o mas formas). Decrementan las chances de
+falsificacion de identidad.
+
+La autenticacion se suele basar en una o mas de tres cosas:
+
+- La posesion de algo (una key o tarjeta)
+- Su conocimiento de algo (user id y password)
+- Un atributo del usuario (fingerprint, retina pattern, signature)
+
+Metodos:
+
+- **Passwords**: Si la que da el usuario matchea la guardada en el sistema,
+  asume que esta siendo accedida por su dueño.
+
+  Estas pueden ser adivinadas, sniffed, transferidas, etc.
+
+  Para almacenarlas de forma segura, se usa *secure hashing*. Como estan
+  hasheadas y no encriptadas, es imposible desencriptarlas y determinar la
+  password original. Cuando un usuario se loguea, se hashea la contraseña y se
+  compara con el hash almacenado, si coinciden, OK.
+
+  Para evitar ataques de enumeracion (o de diccionario) de las contraseñas
+  hasheadas (ya que el archivo es publico) se usan **salts**, o recorded random
+  numbers. El salt value se agrega al password para asegurar que si dos
+  plaintext passwords son las mismas, terminen en hash values diferentes. Esto
+  hace que los ataques de enumeracion sean inviables porque cada palabra del
+  diccionario deberia ser probada con cada salt.
+
+- **One time passwords**: Permite hacer two factor, que mejora single-factor
+  porque ademas de algo que sabes necesitas algo que tenes
+
+- **Biometrics**: Permite multifactor authentication
+
+### Implementing Security Defenses
+
+(!) Los metodos para prevenir o detectar incidentes de seguridad incluyen un
+security policy actualizado, sistemas de deteccion de intrusos, antivirus,
+auditoria y logging de eventos del sistema, syscall monitoring, codigo firmado,
+sandboxing y firewalls.
+
+**Defense in depth**: mas capas de defensa son mejores que menos.
+
+Metodos:
+
+- **Security Policy**
+
+  Dicen *que* es lo que se esta securizando.
+
+- **Vulnerability Assessment**
+
+  Ver si una politica de seguridad esta correctamente implementada.
+
+  Una actividad central es un **penetration test**, en la que la entidad se
+  escanea por vulns conocidas.
+
+- **Intrusion Prevention**
+
+  Detecta intrusions a sistemas y hace respuestas a ellos.
+
+- **Virus Protection**
+- **Auditing, Accounting and Logging**
+- **Firewalling**
+
+  Se usa para separar sistemas confiados y no confiados. Limita
+  acceso a la red entre multiples **dominios de seguridad** y monitorea y loguea
+  las conexiones. Puede limitar conexiones basado en direcciones, puerto o
+  direccion de la conexion.
+
+  Un network firewall puede separar una red en varios dominios. Por ejemplo la
+  internet como untrusted, un semitrusted y semisecure network (DMZ,
+  demilitarized zone) como otro y las computadoras de la compania como otro.
+
+  ![](img-silver/16-security/firewall-domain-separation.png)
+
+- **Address Space Layout Randomization (ASLR)** es mas dificil que inyecten
+  codigo si no saben en que address space esta.
+
+### Example: Windows 10
+
+Mas en el libro
+
+## Chapter 17 - Protection
