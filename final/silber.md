@@ -237,6 +237,21 @@
     - [Implementing Security Defenses](#implementing-security-defenses)
     - [Example: Windows 10](#example-windows-10)
   - [Chapter 17 - Protection](#chapter-17---protection)
+    - [Goals of Protection](#goals-of-protection)
+    - [Principles of Protection](#principles-of-protection)
+    - [Protection Rings](#protection-rings)
+    - [Domain of Protection](#domain-of-protection)
+    - [Access Matrix](#access-matrix)
+      - [Access Matrix Implementation](#access-matrix-implementation)
+    - [Revocation of Access Rights](#revocation-of-access-rights)
+    - [Role-Based Access Control](#role-based-access-control)
+    - [Mandatory Access Control (MAC)](#mandatory-access-control-mac)
+    - [Capability-Based Systems](#capability-based-systems)
+    - [Other Protection Improvement Methods](#other-protection-improvement-methods)
+    - [Language-Based Protection](#language-based-protection)
+- [Part eight - Advanced Topics](#part-eight---advanced-topics)
+  - [Chapter 18 - Virtual Machines](#chapter-18---virtual-machines)
+  - [Chapter 19 - Networks and Distributed Systems](#chapter-19---networks-and-distributed-systems)
 
 Notacion:
 
@@ -5148,3 +5163,306 @@ Metodos:
 Mas en el libro
 
 ## Chapter 17 - Protection
+
+**Protection** involucra controlar el acceso de procesos y usuarios a los
+recursos de un sistema.
+
+Objetivos:
+
+- Objetivos y principios de proteccion
+- Dominios de proteccion, matriz de accesos para especificar que puede acceder
+  cada proceso.
+- Capability- y language-based protection systems
+- Mitigar ataques al sistema con proteccion
+
+### Goals of Protection
+
+El rol de la proteccion en un sistema es proveer los mecanismos para el
+enforcement de policies que delimitan el uso de recursos. Y la flexibilidad para
+aplicar varias de ellas.
+
+**Mechanisms** determinan *como* algo se hace, mientras las **policies**
+determinan *que* se va a hacer. La separacion de ambas es importante para
+flexibilidad.
+
+### Principles of Protection
+
+(!) Las features de system protection estan guiadas por el principio de
+*need-to-know* e implementan mecanismos para hacer cumplir el principio de
+mínimo privilegio.
+
+**Principio de minimo privilegio** (principle of least privilege): los usuarios,
+programas y sistemas deberian ser dados la cantidad de privilegios justa para
+realizar sus acciones.
+
+Los **permisos** pueden bloquear el daño que podria hacer un ataque. Son como el
+sistema inmune del SO.
+
+Un **audit trail** es un hard record en los logs del sistema que puede ayudar a
+revelar warnings o dar insights sobre ataques.
+
+Otro principio es la **compartmentalization**: el proceso de proteger cada
+componente del sistema usando permissions y access restrictions especifica. Asi,
+si un componente es subvertido, otra linea de defensa sigue protegiendo.
+
+Ningun principio es una bala de plata, **defense in depth**: multiples capas de
+proteccion deberian ser aplicadas una arriba de la otra.
+
+### Protection Rings
+
+(!) Una forma comun de securizar objetos es proveer una serie de anillos de
+proteccion, cada uno con mas privilegios que el anterior. ARM por ejemplo tiene
+cuatro. La mas privilegiada la *TrustZone*, se puede llamar solo de modo kernel.
+
+Para poder lograr *separacion de privilegios* se requiere soporte del hardware,
+diferentes niveles de ejcucion. Un modelo popular es el de **protection rings**
+(hecho a partir del de Bell Lapadula), la ejecucion se define como un set de
+anillos concentricos donde mientras mas adentro mas privilegios tienen,
+incluyendo los de los anteriores. El ring 0 entonces tiene todos los
+privilegios.
+
+El sistema arranca en maximo privilegio para poder cargar el SO, y luego se baja
+a un nivel mas bajo. Para poder subir devuelta:
+
+- syscalls
+- traps o interrupts
+
+En intel hay 3 niveles, y para virtualizacion define el nivel -1 para
+**hypervisors** (virtual machine managers) que crean y corren maquinas virtuales.
+
+### Domain of Protection
+
+Los rings separan funciones en dominios y los ordenan jerarquicamente. Una
+generalizacion es usar dominios *sin* jerarquia.
+
+(!) Los sistemas contienen **objetos** que deben ser protegidos del uso
+indebido. Pueden ser *hardware objects* (memoria, tiempo en la CPU, IO devices)
+o *software objects* (archivos, programas y semaforos).
+
+Estos se pueden acceder mediante operaciones definidas, son basicamente TADs.
+(CPU execute, Memory words read/write, DVDROM read, etc.)
+
+**need-to-know principle**: Un proceso solo deberia poder acceder a los objetos
+que requiere en este momento para completar su tarea.
+
+(!) Para facilitar la implementacion del esquema, un proceso puede ejecutar en
+un **protection domain** que especifica los recursos que puede acceder y que
+operaciones puede hacer sobre ellos. La habilidad de hacer una operación en un
+objeto es un *access right*.
+
+Los dominios se pueden representar como una coleccion de pares ordenados
+`<object-name, rights-set>`, como `<file F, {read, write}>`.
+
+![](img-silver/17-protection/protection-domains.png)
+
+Durante su ciclo de vida, un proceso puede estar ligado a un dominio
+(**static**) o puede tener permitido cambiar a otro (**dynamic**, mas
+complicado porque implementa **domain switching**).
+
+El dominio puede realizarse de varias formas
+
+- Un *usuario* puede ser un dominio, y se switchea cuando cambia de usuario.
+- Un *proceso* puede serlo. El domain switching sucede cuando un proceso le
+  manda un mensaje a otro.
+- Un *procedimiento* puede ser un dominio, los objetos que se pueden acceder son
+  las variables locales. Switchea cuando se hace un procedure call.
+
+Ejemplos:
+
+- **Unix**
+
+  Solo el usuario root puede ejecutar acciones privilegiadas. Cuando un usuario
+  normal debe ejecutarlas. Para solucionar este problema se usa el **setuid
+  bit** (owner identification and domain bit), que esta asociado a cada file y
+  puede o no estarlo (`chmod +s`, aparece `s` en `ls`). Quien sea que ejecute el
+  archivo temporalmente asume la identidad del owner del archivo.
+
+  Los binarios setuid deben ser *sterile* (solo afectan archivos necesarios ante
+  constraintes especificos) y hermetic (imposibles de subvertir y manipular).
+  Los atacantes suelen encontrar formas de subvertir estos programas y escalar
+  privilegios.
+
+- **Android**: Proveen user id y group id a las apps, y en base a la combinacion
+  de ambas hacen restricciones.
+
+### Access Matrix
+
+(!) El **Access Matrix** es un modelo general de proteccion que provee un
+mecanismo para proteger sin imponer una policy particular en el sistema o sus
+usuarios. La separacion de policy y mecanismo es una propiedad del diseño
+importante.
+
+Las rows representan dominios y las columnas objetos. Cada entry es un set de
+access rights. `access(i, j)` = operaciones que un proceso ejecutando en Di
+puede invocar en el objeto Oj.
+
+![](img-silver/17-protection/access-matrix.png)
+
+El switching se incluye en la matriz de permisos, tomando a los dominos como
+objetos. Di puede switchear a Dj si $switch \in access(i, j)$
+
+![](img-silver/17-protection/access-matrix-domains.png)
+
+Para controlar los cambios de contenido de la matriz, se agregan las operaciones
+`copy`, `owner` y `control`. Se agrega un `*` si se puede copiar de un row
+(dominio) a otro. Por defecto solo en la columna (objeto)
+
+El libro habla de mas operaciones pero no creo que esto sea importante la
+verdad.
+
+#### Access Matrix Implementation
+
+(!) La access matrix es *rala* (sparse, muchos 0). Se suele implementar como
+listas de acceso asociadas a cada objeto, o como capability lists asociadas a
+cada dominio. Se puede agregar proteccion dinamica al modelo de matriz de
+proteccion considerando dominios y la matriz en si como objetos.
+
+- **Global table**: Una tabla de triplas `<domain, object, rights-set>`.
+
+  \+ simple
+
+  \- muy grande, no aprovecha agrupaciones especiales
+
+- **Access lists for objects**: Cada objeto tiene una lista de `<domain,
+  rights-set>`. Se puede extender facil con rights default sin tener que
+  agregarlas a todos.
+
+  \+ se corresponden directamente a las necesidades de los usuarios
+  
+  \- determinar el set de access rights para cada dominio es complicado porque no
+  estan localizados.
+
+- **Capability Lists for Domains**: Asociar cada fila con su dominio. Una
+  **capability list** para un dominio es una lista de objetos con las
+  operaciones que se pueden hacer. Un objeto es entonces una **capability**.
+  Esta lista no debe poder ser accedida por los procesos de usuario.
+
+  \- no se corresponden directamente
+
+  \- revocation ineficiente
+
+  \+ localiza informacion a un proceso. El que quiera acceder tiene que
+  presentar una capability para ese acceso
+
+- **Lock-Key mechanism**: Es un compromiso entre access lists y capability
+  lists. Cada objeto tiene una lista de **locks** (patrones de bits unicos) y
+  cada dominio tiene una lista de **keys** (otros patrones de bits unicos). Los
+  procesos ejecutando en un domino pueden acceder a un objeto solo si el dominio
+  tiene una key que matchea uno de los locks del objeto.
+  
+  \~ depende de la longitud e las keys, pero puede ser eficiente y flexible.
+
+  \+ efectivamente revocados
+
+La mayoria de los sistemas usan una combinacion de capabilities y access lists.
+Por ej en unix cuando un proceso abre un archivo, se chequea en el access list
+asociado al archivo si puede, y luego se pone en una file table como
+capabilities las operaciones que pidio hacer (read, write, etc.) para comparar
+mas eficientemente luego.
+
+### Revocation of Access Rights
+
+(!) *Revocation of access rights* suele ser mas facil de implementar en un
+modelo de proteccion dinamico con una access-list que con una capability list.
+
+Sacarle acceso a objetos compartidos por diferentes usuarios.
+
+- **Immediate vs delayed**: Ocurre inmediatamente o espera? Cuanto?
+- **Selective vs general**: Afecta todos los usuarios que tienen acceso a ese
+  objeto, o se puede especificar ugrupo de usuarios para revocar?
+- **Partial vs total**: Se puede sacar un subconjunto de los access rights o se
+  sacan todos?
+- **Temporary vs permanent**: Se pueden volver a obtener?
+
+Con access list es facil porque esta ahi centralizado, pero con capabilities
+estan dispersas por todo el sistema. Esquemas para esto en el libro.
+
+### Role-Based Access Control
+
+(!) Solaris 10 y mas adelante (entre otros sistemas) implementan el principio de
+minimo privilegio mediante **role-based access control** (RBAC), una forma de
+access matrix.
+
+Funciona al rededor de privilegios: el derecho de ejecutar una syscall o usar
+una opcion dentro de una syscall (por ej. abrir un file con write access). Estos
+privilegios se pueden asignar a **roles**. Los usuarios pueden ser asignados
+roles o pueden tomarlos con contraseña, eliminando la necesidad de setuid.
+
+![](img-silver/17-protection/role-based.png)
+
+### Mandatory Access Control (MAC)
+
+(!) Es otra extension de proteccion, una forma de system policy enforcement.
+
+Tipicamente los SOs usan **discretionary access control** (DAC) para restringir
+acceso a archivos y otros objetos del sistema. Con DAC, un acceso se controla en
+base a las identidades de usuarios o grupos. En Unix, toma la forma de file
+permissions (`chmod`, `chown`, `chgrp`) y Windows provee mas granularidad con ACLs
+(access control lists).
+
+El problema que tiene es que son discrecionales, deja que el owner de un recurso
+ponga cualquier permiso, y el hecho de que el superuser tiene acceso total y
+completo.
+
+Una forma mas potente de proteccion es **mandatory access control (MAC)**: es
+una system policy que ni el root user puede moficiar (a menos que la policy lo
+permita). Usa **labels** que se asignan a objetos y subjects (actores o
+procesos). Cuando un sujeto quiere hacer una operacion en un objeto, hay una
+policy que dice si alguno de sus labels se lo permite.
+
+### Capability-Based Systems
+
+(!) Los sistemas basados en **capabilities** suelen frecer finer-grained
+protection que modelos mas viejos, proporcionando habilidades especiales a
+procesos partiendo los poderes de root en distintas areas.
+
+![](img-silver/17-protection/capabilities.png)
+
+### Other Protection Improvement Methods
+
+(!) Solo los nombra
+
+- **System Integrity Protection** (**SIP**) se usa en mac.
+
+- **Syscall Filtering**
+
+  La unica forma que tienen los usuarios en de un kernel monolitico de ganar
+  control es a traves de syscalls. Por eso es imperativo aplicar algun tipo de
+  **syscall filtering**.
+
+- **Sandboxing**
+
+  Correr procesos en entornos que limitan lo que pueden hacer. En vez de
+  permitirle el uso de todos los recursos que dan los privilegios del usuario
+  (ya que un proceso corre con los mismos privilegios que el usuario que lo
+  corrio, y si corre como root puede hacer lo que quiera) se imponen
+  restricciones irremovibles.
+
+- **Code Signing**: Es la firma digital de programas y ejecutables para
+  confirmar que no cambiaron desde que el autor los creo. Usa un hash.
+
+  Muchos SOs ni corren programas que no pasan el code-sign check.
+
+### Language-Based Protection
+
+(!) **Language-based protection** brinda un arbitraje de requests y
+privilegios mas fine-grained de lo que puede proveer el SO. Por ejemplo, una JVM
+de java puede correr varios threads en diferentes clases de proteccion. Enforza
+los requests de recursos a traves de stack-inspection sofisticado y el
+type-safety del lenguaje.
+
+- **Compiler based enforcement**
+
+  Se puede agregar al sistema de tipos de un lenguaje formas de declarar
+  ownership de recursos. De esta forma, el metodo que se usa para enforzarlo es
+  abstraido.
+
+- **Runtime based enforcement** - Java
+
+  La JVM tiene muchos mecanismos de proteccion. Mas en el libro.
+
+# Part eight - Advanced Topics
+
+## Chapter 18 - Virtual Machines
+
+## Chapter 19 - Networks and Distributed Systems
