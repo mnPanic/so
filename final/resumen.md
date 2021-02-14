@@ -116,6 +116,11 @@
       - [Instantanea (snapshot) global consistente](#instantanea-snapshot-global-consistente)
       - [2PC (Two Phase Commit)](#2pc-two-phase-commit)
       - [Consenso](#consenso)
+  - [10 - Avanzados](#10---avanzados)
+    - [Microkernels](#microkernels)
+    - [Virtualizacion](#virtualizacion)
+      - [Contenedores](#contenedores)
+    - [DFS (Distributed File System)](#dfs-distributed-file-system)
 
 ## Bibliografia
 
@@ -2331,3 +2336,184 @@ Aplicaciones
 
 - Sincronizacion de relojes (NTP, RFC 5905 y anteriores)
 - Tolerancia a fallas en sistemas criticos.
+
+## 10 - Avanzados
+
+### Microkernels
+
+Busca contrarrestar las desventajas de un kernel monolitico logrando
+
+- Menos codigo privilegiado
+- Facilidad de actualizaciones
+- Mayor flexibilidad y extensibilidad
+- Crash de servicios no tira abajo todo el sistema
+- Diferentes flavors de servicios
+
+Para esto se hace el minimo kernel posible, que tenga manejo basico de memoria,
+IPC liviano y manejo basico de ES. Todo lo demas se provee por procesos que
+corren por fuera del kernel, **servicios** (hay uno que implementa TCP/IP, otro
+filesystems, etc.)
+
+Resulta mas lento en la practica que los kernels monoliticos, y nunca termino de
+tomar vuelo. Excepciones notables
+
+- QNX: Unix RT microkernel para embebidos
+- MacOS tiene match que es unm microkernel.
+
+### Virtualizacion
+
+**Virtualizacion** es la posibilidad de que un conjunto de recursos fisicos se
+vean como varias copias de recursos logicos. Pensar en una computadora
+realizando el trabajo de varias. Esto sirve para tener *maquinas virtuales*, con
+objetivos:
+
+- Portabilidad (por ej. JVM)
+- Simulacion y testing
+- Aislamiento
+- Agrupamiento de funciones
+- Particionamiento del HW
+- Proteccion ante fallas del HW mediante migracion entre HW sin perdida de
+  servicio.
+
+Se puede lograr mediante
+
+- **Simulacion**: El sistema *host* (o anfitrion) se construye una variable de
+  estado artificial que representa al sistema *guest* (o huesped). Lee cada
+  instruccion y modifica el estado como si estuviera ejecutando realmente.
+
+  Pero tiene mucho overhead, y detalles: como maneja interrupciones, DMA,
+  concurrencia, etc.?
+
+- **Emulacion** del hardware: El sistema emulado se ejecuta realmente en la CPU
+  del host, y se *emulan* los componentes del hardware.
+
+  El grueso del codigo se corre mediante *trauduccion binaria*: las cosas que
+  funcionan en el HW tal cual las ejecuto, y las que no las reemplazo por
+  equivalentes.
+  
+  Tiene un problema con la separacion de privilegios, toda la VM corre en modo
+  usuario.
+
+Por esto surge la intencion de lograr virtualizacion asistida por hardware, para
+evitar los siguientes problemas
+
+- Ring aliasing: Programas escritos para modo kernel que se ejecutan en modo
+  usuario.
+- Address-space compression: Que la maquina virtual no pise la memoria del
+  emulador, desde el punto de vista del host son un proceso
+- Non-faulting access to privileged state
+- Interrupt virtualization: Simularle las int al SO host.
+- Access to hidden state: Parte del estado del procesador que no es consultable
+  por software
+- Ring compression: No hay proteccion entre kernel y programas de usuario en la
+  VM
+- Frequent access to privileged resourceAs: El controlador de maquinas virtuales
+  puede bloquear el acceso a ciertos recursos, haciendo que genere un trap, lo
+  que puede ser un bottleneck para recursos accedidos frecuentemente.
+
+Para solucionarlo, los fabricantes agregan soporte para virtualizacion dentro
+del hardware.
+
+> En Intel se agregan las extensiones VT-x, que proveen modos VMX root y VMX
+> non-root
+
+Tiene problemas:
+
+- Optimizaciones pensadas para el kernel, picos de carga en mas de una CPU
+- Unico punto de falla
+
+Usos
+
+- Correr sistemas viejos
+- Aprovechar equipamiento
+- Desarrollo / testing / debugging
+- Abaratar costos
+
+#### Contenedores
+
+![](img/advanced/containers.png)
+
+Es una especie de maquina virtual, no simula, su motivación tiene que ver. La
+idea es correr apps en la misma computadora sin que interfieran entre si,
+generando un entorno lo más replicable posible.
+
+Tiene varias ventajas: codigo compartido, portabilidad, aislamiento, capas,
+snapshots.
+
+### DFS (Distributed File System)
+
+Es un sistema de archivos cuyos servidores y dispositivos de almacenamiento
+estan distribuidos entre las maquinas de un sistema distribuido.
+
+Hay dos modelos: Cliente servidor y basados en clusters. Desafios: Nomenclatura
+y transparencia, acceso a archivos remotos, caches y consistencia.
+
+- **Cliente servidor**
+
+  Ejemplo: NFS
+
+  El servidor almacena los archivos y su metadata en almacenamiento conectado al
+  servidor. Los clientes se contactan a el para pedirle archivos, y el servidor
+  es el responsable de la autenticacion, chequeo de permisos y envio del
+  archivo.
+  
+  Los cambios que hace un cliente al archivo deben ser propagados al servidor.
+
+  El problema es que hay un unico punto de falla en el servidor, que ademas es
+  un cuello de botella para todos los pedidos. Problemas de escalabilidad y
+  bandwidth.
+  
+  ![](img/advanced/dfs-client-server.png)
+
+- **Cluster**
+
+  Ejemplo: Google File System (GFS) y Haddop Distributed File System (HDFS)
+
+  Mas resistente a fallas y escalable que client-server.
+
+  Los clientes se conectan a un servidor de metadata que contiene un mapeo de
+  que servidores de datos contienen que chunks de cada archivo y hay varios
+  servidores de datos que contienen chunks (porciones) de archivos.
+
+  Los chunks se replican n veces.
+
+  ![](img/advanced/dfs-cluster.png)
+
+  - GFS (Global File System)
+
+La **nomenclatura** es el mapeo entre objetos logicos y fisicos.
+
+Un **mapeo multinivel** es una abstraccion de un archivo que oculta los detalles
+de como y donde en disco esta almacenado el archivo.
+
+Un DFS *transparente* oculta la ubicacion en la que se almacena el archivo en la
+red. Entonces para uno replicado en varios sitios, el mapeo devuelve un set de
+las ubicaciones de las replicas. La existencia y ubicacion de multiples copias
+se ocultan.
+
+Nombres:
+
+- Transparencia de ubicacion: El nombre del archivo no revela su ubicacion
+  fisica
+- Independencia de ubicacion: El nombre del archivo no cambia cuando la
+  ubicacion fisica cambia.
+
+La mayoria de los DFS usan un mapeo estatico, independiente de la ubicacion para
+nombre a nivel de usuario.
+
+Esquema de nombres, tres enfoques
+
+- Los archivos se nombran combinando host con nombre local. Esto garantiza un
+  nombre unico en todo el sistema. No es ni transparente ni independiente de
+  ubicacion
+
+- Montar directorios remotos en locales, dando la apariencia de un arbol de
+  directorios coherentes. Solo los remotos previamente montados pueden ser
+  accedidos de manera transparente.
+
+- Unica estructura global de nombre abarca a todos los archivos del sistema. Si
+  un servidor no esta disponible, un conjunto arbitrario de directorios en
+  distintas maquinas tambien.
+
+El resto no parece importante y me parece que ni entra, asi que mas en las
+diapos.
