@@ -95,6 +95,27 @@
     - [Buffer overflows](#buffer-overflows)
     - [Mecanismos de proteccion](#mecanismos-de-proteccion)
     - [Controles de parametros](#controles-de-parametros)
+  - [9 - Sistemas Distribuidos](#9---sistemas-distribuidos)
+    - [Memoria compartida](#memoria-compartida)
+    - [Distribuido](#distribuido)
+    - [Arquitecturas](#arquitecturas)
+      - [Cliente-servidor](#cliente-servidor)
+      - [Async](#async)
+    - [Locks](#locks)
+      - [Enfoque centralizado (coordinador)](#enfoque-centralizado-coordinador)
+      - [Ordenar eventos en la red](#ordenar-eventos-en-la-red)
+    - [Acuerdo bizantino](#acuerdo-bizantino)
+    - [Clusters](#clusters)
+    - [Scheduling en distribuidos](#scheduling-en-distribuidos)
+    - [Problemas y algoritmos](#problemas-y-algoritmos)
+      - [Modelo de fallas](#modelo-de-fallas)
+      - [Metricas de complejidad](#metricas-de-complejidad)
+      - [Exclusion mutua distribuida](#exclusion-mutua-distribuida)
+      - [Locks - protocolo de mayoria](#locks---protocolo-de-mayoria)
+      - [Eleccion de lider](#eleccion-de-lider)
+      - [Instantanea (snapshot) global consistente](#instantanea-snapshot-global-consistente)
+      - [2PC (Two Phase Commit)](#2pc-two-phase-commit)
+      - [Consenso](#consenso)
 
 ## Bibliografia
 
@@ -1874,3 +1895,439 @@ ataques, como
 Cuando no se valida el input y se termina haciendo algo que no debia, como un
 sql inyection o un rm -rf en un `system`.
 
+## 9 - Sistemas Distribuidos
+
+Un **sistema distribuido** es un conjunto de varios recursos conectados entre si
+que interactuan. Pueden ser varias maquinas en una red, un procesador con varias
+memorias, varios procesadores que comparten memorias.
+
+Fortalezas:
+
+- Paralelismo
+- Replicacion
+- Descentralizacion
+
+Debilidades:
+
+- Dificultad en la sync
+- Dificultad para mantener coherencia
+- No suelen compartir clock
+- Informacion parcial
+
+### Memoria compartida
+
+Puede ser por hardware:
+
+- UMA: Uniform memory access
+- NUMA: Non uniform memory access
+- Hibrida
+
+O por software
+
+- Estructurada
+  - Memoria asociativa
+  - Distributed arrays
+- No estructurada
+  - Memoria virtual global
+  - Memoria virtual particionada por localidad
+
+### Distribuido
+
+Sin memoria compartida, es un sistema distribuido. Computadoras (nodos)
+conectadas a traves de la red.
+
+### Arquitecturas
+
+#### Cliente-servidor
+
+La cooperacion tiene forma de solicitarle servicios a otros, que no tienen un
+rol activo. El **servidor** es el que da servicios cuando el cliente se lo pide.
+El programa principal hace de cliente de los distintos servicios que necesita
+para cumplir con su tarea.
+
+- **Telnet**
+
+  Los recursos necesarios para el procesamiento estan en otro equipo, accedemos
+  a el y hacemos el procesamiento de manera remota. El otro solo tiene que
+  recibir las conexiones. Utilizacion asimetrica de los recursos.
+
+- **RPC**
+
+  Se hacen *procedure calls* de forma remota. Se stubbea la funcion llamada por
+  una que hace un llamado a traves de la red y el programador no se entera. Del
+  otro lado tiene que haber un *daemon* para recibir la peticion y ejecutar la
+  funcion.
+
+  Un stub es una funcion que tiene la misma aridad que la real, pero por abajo
+  tiene otra implementacion.
+
+  ![](img/dist/rpc.png)
+
+  Es un mecanismo **sincronico**, el proceso queda bloqueado hasta que no se
+  hace el camino de ida y vuelta.
+
+  - Java Remote Method Invocation
+  - JSON-RPC
+  - SOAP
+
+#### Async
+
+Comunicacion async
+
+- **RPC async**
+  - Promises
+  - Futures
+  - Windows async RPC
+
+- **Pasaje de mensajes**
+
+  Ejemplos:
+  - Mailbox
+  - Pipe
+  - MPI
+  - Scala actors
+
+  Es el metodo mas general, ya que solo supone que hay compartido un canal de
+  comunicacion (puede llegar a ser un bus).
+
+  Problemas a considerar:
+
+  - Codificacion de los datos
+  - Si es comunicacion async, hay que ver cada tanto si recibo un mensaje
+  - La red es lenta
+  - El canal puede perder pensajes. gracias a TCP/IP podemos hacer de cuenta que
+    hay una capa que soluciona eso, y que los canales son más confiables.
+  - Podria costar plata $$ mandar mensajes.
+
+  Y a ignorar
+
+  - Los nodos pueden morir
+  - La red se puede partir
+
+  **Conjetura de brewer**: En un entorno distribuido, se pueden tener solo dos
+  de tres
+  
+  - Consistencia: Todos los nodos tienen la misma informacion
+  - Disponibilidad: El sistema esta disponible 24/7
+  - Tolerancia a fallas: Se banca que haya nodos que se caigan
+
+  Lograr cada una afecta a las demas. Por ejemplo, si se cae un nodo y el
+  sistema continua funcionando, es tolerante a fallas, pero cuando levante
+  nuevamente va a tener informacion inconsistente.
+
+### Locks
+
+En entornos distribuidos no tenemos un TestAndSet atomico. Como hacemos?
+
+#### Enfoque centralizado (coordinador)
+
+Un nodo es distinguido, el *coordinador*, y es el que se encarga de arbitrar los
+recursos. Tiene varios problemas
+
+- Puede llegar a ser un bottleneck de procesamiento y capacidad de red.
+- Comunicarse con el es lento (red)
+- Es el unico punto de falla, si se cae, se cae toda la red. Una cadena se corta
+  por el eslabon las debil.
+
+#### Ordenar eventos en la red
+
+El que quiere usarlo, canta pri y se lo dice a todos. Si dos lo hacen a la vez,
+todos los escuchan en algun orden.
+
+Si dos nodos emiten el mensaje al mismo tiempo, como están a distancias
+diferentes, llegan en momentos diferentes. En una red, el orden el que se
+reciben los mensajes no necesariamente tiene que ver con el orden en el que
+fueron emitidos.
+
+Uno podría decir, si todos tenemos la hora, está todo bien, pero trae otras
+dificultades también.
+
+**Como sabemos entonces cuando sucede un evento antes que otro en una red?**
+
+> Hay protocolos de sync de relojes en la red, como NTP (Network Time Protocol)
+> que tratan de lograr que sea *suave*. Si notan un desfazaje, lo van ajustando
+> lentamente para que no haya cambios abruptos. Y los relojes tienden a
+> desincronizarse, entonces cuando es necesaria una sync por tiempo muy fina
+> como para un mecanismo de locks, no sirve.
+
+No es necesario sincronizar los relojes. Lamport: solo es necesario ordenar los
+eventos, saber si algo ocurrio antes o despues, pero no importa exactamente
+cuando.
+
+Leslie define un **orden parcial no reflexivo** entre los eventos
+
+- Si en un proceso A sucede antes que B, A -> B
+- Si E es el envio de un mensaje y R su recepcion, E -> R sin importar en que
+  procesos ocurran.
+- Transitividad: A -> B y B -> C entonces A -> C
+- Si no vale A -> B ni B -> A, entonces A y B son *concurrentes* (no es un orden
+  total, no estan todos los elementos relacionados entre si)
+
+Implementacion
+
+- Cada procesador tiene un reloj, alcanza con que sea un valor monotonicamente
+  creciente.
+- Cada mensaje tiene timestamp
+- Cuando recibo un mensaje enviado en un tiempo `t`, me fijo que hora tengo
+  - Si es anterior, entonces ahora es despues que el instante, ya que la
+    recepcion es mayor al envio. Paso mi tiempo a al menos `t+1`.
+
+Con esto construyo un orden parcial. Para un orden *total*, puedo romper empates
+arbitrariamente (como por el PID) para eventos concurrentes.
+
+### Acuerdo bizantino
+
+- [Video de Tom Scott](https://www.youtube.com/watch?v=IP-rGJKSZ3s)
+
+Formalizacion
+
+- Dadas
+  - **Fallas** en la comunicacion
+  - **Valores** $V = \{0, 1\}$
+  - **Inicio** todo proceso $i$ empieza con un valor valido, $init(i) \in V$
+- Se trata de
+  - **Acordar** Para todo $i \neq j, decide(i) = decide(j)$
+  - **Validez** $\exists i, decide(i) = init(i)$
+  - **Terminacion** todo $i$ decide en un numero finito de transiciones (WAIT
+    FREEDOM)
+
+Teo: No existe ningun algoritmo para resolver consenso en este escenario.
+
+- Dadas
+  - **Fallas** los procesos dejan de funcionar
+  - **Valores** $V = \{0, 1\}$
+  - **Inicio** todo proceso $i$ empieza con un valor valido, $init(i) \in V$
+- Se trata de
+  - **Acordar** Para todo $i \neq j, decide(i) = decide(j)$
+  - **Validez** $\forall i init(i)=v$ entonces $\nexists j, decide(j) \neq v$
+  - **Terminacion** todo $i$ que *no falla* decide en un numero finito de transiciones
+
+Teo: Si fallan a lo sumo k < n procesos, entonces se puede resolver consenso con
+O((k+1) * n^2) mensajes
+
+Y hay otro para procesos no confiables
+
+### Clusters
+
+En un sentido cientifico, es un conjunto de computadoras conectadas a una red
+con un scheduler de trabajos. No es uno como el del SO, sino que le doy una
+serie de tareas y sus caracteristicas y este lo manda a correr de forma
+distribuida en una red. En la facu tenemos el **CECAR**, un cluster de computo
+cientifico.
+
+En el resto del mundo, es un conjunto de computadoras que estan trabajando en
+conjunto de alguna forma.
+
+- **Grid** Conjunto de clusters
+- **Cloud**: Tengo una serie de computadoras y las alquilo
+  - Puede ser un servicio *elastico*, escala la cantidad de computadoras. En vez
+    de hacerlo a mano podria ser automatico segun el trafico. (autoscaling)
+
+### Scheduling en distribuidos
+
+Dos niveles:
+
+- Local: Dar el procesador a un proceso listo
+- Global: Asignar un proceso a un procesador (**mapping**)
+
+  Para **compartir** la carga entre los procesadores
+
+  - Estatica: **affinity**: las tareas son asignadas a un procesador. Tal vez
+    para resolverlas necesito hacer uso de ciertos recursos que no es tan fácil
+    mover a través de la red.
+  - Dinámica: **migration** La asignación varía durante la ejecución. Es un
+    problema complejo, porque es dificil saber cuando mover, y de donde a donde
+    mover. Y quien lo define? Los nodos lo definen de forma distribuida? Un nodo
+    solo está destinado a ello? Es un quilombo.
+    - **Sender initiated**: Iniciaza por el procesador sobrecargado)
+    - **Receiver initiated** / **work stealing**: Iniciada por el proc. libre
+
+### Problemas y algoritmos
+
+Problemas y algoritmos sobre sistemas totalmente distribuidos. Pertenecen a tres
+grandes familias
+
+- Orden de ocurrencia de los eventos
+- Exclusion mutua
+- Consenso
+
+#### Modelo de fallas
+
+Cuando se trabaja con algoritmos distribuidos es importante determinar el modelo
+de fallas. Alternativas (combinables) que indicen algoritmos distintos.
+
+- Nadie falla (los resultados son correctos si no hay fallas)
+- Los procesos caen pero no levantan
+- Caen y pueden levantar
+- Caen y pueden levantar, pero solo en determinados momentos
+- La red se particiona
+- Los procesos pueden comportarse de manera impredecible.
+
+En la materia nos concentramos en algoritmos sin fallas.
+
+#### Metricas de complejidad
+
+Se mide segun la cantidad de mensajes enviadas a traves de la red, pero no
+siempre es asi, por ej. algoritmos sobre redes dedicadas de alta velocidad
+pueden llegar a tener otros bottlenecks.
+
+#### Exclusion mutua distribuida
+
+Formas:
+
+- **Token passing**
+
+  Aramr un anillo logico (onda token ring) entre los procesos y poner a circular
+  un token. Cuando quiero entrar a CRIT, espero a que me llegue el token.
+
+  Sin fallas no hay inanicion, pero hay mensajes circulando cuando no son
+  necesarios.
+
+- **Otra**
+
+  - Cuando quiero entrar, envio a todos un mensaje `solicitud(Pi, ts)` (ts
+  timestamp). Cada proceso puede responder inmediatamente o encolar la
+  respuesta.
+  - Entro cuando recibi todas las respuestas.
+  - Y si entro, al salir respondo todos los pedidos demorados.
+  - Respondo inmediatamente si:
+    - No quiero entrar a CRIT
+    - Quiero entrar, aun no lo hice, y el `ts` del pedido que recibi es menor
+      que el mio, entonces el otro tiene prioridad.
+
+  Requiere que todos conozcan la existencia de todos (no es un token ring), pero
+  no circulan mensajes si no se quiere entrar a la seccion critica.
+
+  Tiene de supuestos que no se pierden mensajes y que ningun proceso falla.
+
+#### Locks - protocolo de mayoria
+
+Queremos obtener un lock sobre un objeto del cual hay copias en n lugares.
+Para hacerlo, debemos pedirlo a por lo menos n/2 + 1 (la mitad mas uno) sitios
+
+Cada sitio responde si puede o no darnoslo.
+
+1. Se puede pensar como computadoras que tienen archivos, y hay distintos
+   procesos que tienen acceso exclusivo a distintos recursos en distintos
+   lugares de la red. Y quieren obtener un lock para esos recursos
+2. O tambien, que esos distintos archivos son copias de la misma informacion,
+   entonces me tengo que garantizar de lockear todos a la vez
+
+Si obtengo el lock, cada objeto tiene un numero de version, entonces lo
+escribimos **en todas las copias** y ponemos el numero de version como el max+1.
+
+- **No se pueden otorgar dos locks a la vez** ya que seria necesario que dos
+  procesos tengan al menos la mitad mas 1.
+
+- **No se puede leer una copia desactualizada** ya que cada proceso escribe en
+  n/2 + 1 copias, entonces siempre voy a leer al menos 1 de las que escribio el
+  otro proceso, la cual esta actualizada.
+
+  > Supongamos que leo una copia desactualizada.
+  > Debo tener $k \geq n/2 + 1$ locks cuya ts sea $t$, y que exista otra copia
+  > $j$ con marca $t_j > t$.
+  >
+  > Por lo tanto, el ultimo que escribio la version $t_j$, lo tuvo que hacer en
+  > menos de $n/2 + 1$ copias, porque sino al menos una de las mias tendria
+  > marca $t_j$.
+  >
+  > Pero cada proceso escribe siempre en todas las que tiene lockeadas, y lockea
+  > al menos $n/2 + 1$. Abs!
+
+#### Eleccion de lider
+
+Una serie de procesos elije a uno como *lider* para alguna tarea.
+
+- Mantengo un status que dice si soy el lider o no. Comienza con que no
+- Organizo los procesos en un anillo y hago circular mi ID.
+- Cuando recibo un mensaje, comparo el ID que circula con el mio, y circulo el
+  mayor.
+- Cuando dio toda la vuelta, sabemos quien es el lider. (el maximo)
+- Circulamos otro mensaje de notificacion para que todos lo sepan.
+
+Complicaciones posibles: varias elecciones simultaneas, procesos que suben y bajan del anillo.
+
+Complejidades
+
+- Tiempo
+  - Sin fase de stop O(n)
+  - Con fase de stop O(2n)
+- Comunicacion
+  - O(n^2)
+  - Cota inferior de nlogn
+
+#### Instantanea (snapshot) global consistente
+
+Es *global* porque quiero saber el estado de todos los nodos del sistema.
+Pero como no comparten clocks, necesito que si los miro a todos juntos, eso
+tenga sentido que haya sucedido en algun momento del tiempo. Que sean
+*consistentes* entre ellos. Por ejemplo,
+
+> si un nodo en su estado dice que
+>
+> `A -> B`
+>
+> B recibio un mensaje de A
+> no puede suceder que A crea que no se lo envio, porque la recepcion siempre
+> es posterior al envio. Pero al reves si, ya que el mensaje puede estar en el
+> aire
+
+Algoritmo
+
+- Cuando se quiere hacer una instantanea, envia un mensaje de `marca` a si
+  mismo.
+- Cuando recibo por primera vez un mensaje de marca, guardo una copia de mi
+  estado y le mando a todos los otros procesos un mensaje de marca
+- Empiezo a registrar los mensajes que recibo hasta que recibo `marca` de todos
+
+  > deberia recibir marca de todos una vez, pues todos lo mandan una vez a todos
+
+- Cuando recibo el ultimo de marca, se que termino la instantanea. Y todos los
+  procesos guardaron la copia de su estado. Los mensajes de la primera a la
+  ultima estaban en vuelo durante la instantanea.
+
+- Finalmente, el estado global es que cada proceso esta en cierto estado, y los
+  mensajes que cada proceso se guardo despues del comienzo de la instantanea son
+  los que estan circulando por la red.
+
+Usos:
+
+- Deteccion de propiedades estables (una vez que son verdaderas, lo siguen
+  siendo)
+- Deteccion de terminacion
+- Debugging distribuido
+- Deteccion de deadlocks
+
+#### 2PC (Two Phase Commit)
+
+Acuerdo en dos etapas. La idea es realizar una transaccion de manera *atomica*,
+todos los nodos tienen que estar de acuerdo en si se hizo o no se hizo.
+
+Espiritu
+
+- En la primera fase, preguntamos a todos si estamos de acuerdo con que se haga
+  la transaccion, con un timeout para las respuestas
+  - Si recibimos *no* de al menos uno (o cortamos por timeout), abortamos
+  - Si recibimos todos *si*, pasamos a la segunda
+- En la segunda fase, avisamos a todos que quedo confirmada.
+
+#### Consenso
+
+Acuerdos:
+
+- k-agreement (o k-set agreement)
+
+  decide(i) $\in W$ tq $|W| = k$, se deciden k cosas
+
+- Aproximado
+
+  $\forall i \neq j |decide(i) - decide(j)| \leq \epsilon$
+
+- Probabilistico
+
+  $P(\exists i \neq j. decide(i) \neq decide(j)) < \epsilon$
+
+Aplicaciones
+
+- Sincronizacion de relojes (NTP, RFC 5905 y anteriores)
+- Tolerancia a fallas en sistemas criticos.
