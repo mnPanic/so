@@ -251,6 +251,14 @@
     - [Language-Based Protection](#language-based-protection)
 - [Part eight - Advanced Topics](#part-eight---advanced-topics)
   - [Chapter 18 - Virtual Machines](#chapter-18---virtual-machines)
+    - [VM Overview](#vm-overview)
+    - [VM History](#vm-history)
+    - [Benefits and features](#benefits-and-features)
+    - [Building Blocks](#building-blocks)
+    - [Types of VM and their Implementation](#types-of-vm-and-their-implementation)
+    - [Virtualization and OS Components](#virtualization-and-os-components)
+    - [VM Examples](#vm-examples)
+    - [Virtualization Research](#virtualization-research)
   - [Chapter 19 - Networks and Distributed Systems](#chapter-19---networks-and-distributed-systems)
 
 Notacion:
@@ -5464,5 +5472,115 @@ type-safety del lenguaje.
 # Part eight - Advanced Topics
 
 ## Chapter 18 - Virtual Machines
+
+**Virtualizacion** tiene muchos significados. Con *maquinas virtuales*, un guest
+OS y apps corren en un entorno que parece y se comporta como hardware nativo
+pero en realidad no lo es.
+
+Objetivos:
+
+- Historia y beneficios de maquinas virtuales
+- Tecnologias
+- Metodos usados para implementar virtualizacoin
+- Hardware features comunes para eso y como se usan por el SO
+- Current virt research areas
+
+### VM Overview
+
+(!) Virtualizacion es un metodo para proveer a un guest con un duplicado del
+hardware subyacente de un sistema. Multiples guests pueden correr en un sistema,
+cada uno creyendo que es el SO nativo y tiene el full control
+
+VMM (virtual machine manager) = hypervisor
+
+![](img-silver/18-virt-machines/vm-system-model.png)
+
+### VM History
+
+(!) La virtualizacion arranco como un metodo para permitir que IBM segregue
+usuarios y les provea sus propios entornos de ejecucion en los mainframes. Desde
+ese momento gracias a las mejoras en hardware, virtualizacion se convirtio en
+algo normal, y los diseñadores de CPUs agregaron features para soportarlo.
+
+### Benefits and features
+
+### Building Blocks
+
+- Trap and emulate
+
+  ![](img-silver/18-virt-machines/trap-n-emulate.png)
+
+- Binary Translation
+
+  ![](img-silver/18-virt-machines/binary-translation.png)
+
+- Hardware assistance: Mientras mas mejor.
+
+### Types of VM and their Implementation
+
+(!) El virtual machine manager o **hypervisor**, crea y corre la virtual
+machine. Tipos de hipervisores:
+
+- Type 0: Se implementan desde el hardware y requieren soporte del SO. Algunos
+  proveen un ejemplo de *paravirtualization*, en la cual el SO guest esta al
+  tanto de ella (en vez de creer que corre en hardware directamente y es el
+  unico) y asiste en su ejecucion.
+
+  > Ejemplos: IBM LPARs, Oracle LDOMs, suelen estar en mainframes y servidores
+
+- Type 1: Proveen en entorno y features para crear, correr y manejar virtual
+  machines. Cada guest incluye el software tipicamente de un sistema nativo
+  completo, incluyendo el SO, drivers, aplicaciones, cuentas, etc.
+
+  > Ejs: Joyent SmartOS, Citrix XenServer
+
+- Type 2: Son aplicaciones que corren en otros SOs, que no saben que esta
+  sucediendo virtualizacion. No tienen hardware o host support y deben hacer
+  todas las actividades de virtualizacion en el contexto de un proceso.
+
+  > Ejs: Virtual box
+
+(!) Programming-environment virtualization es una parte del diseño de un
+lenguaje de programacion. Este especifica una aplicacion en la que corren los
+programas, que provee servicios a ellos. Por ejemplo la JVM.
+
+(!) La **emulacion** se usa cuando el host system tiene una arquitectura y el
+guest fue compliado para otra. Cada instruccion que el guest quiere ejecutar
+debe ser traducida de ese instruction set al del hardware nativo. A pesar de que
+tiene un penalty en performance, se balancea por la utilidad de poder correr
+programas viejos en hardware nuevo incompatible, o correr juegos para consolas
+viejas en hardware moderno.
+
+Cuando se usa virtualizacion para segregar aplicaciones, manejar su performance
+y uso de recursos, y tener una forma facil de hacer start stop, move y
+manejarlas, tal vez no es necesario usar tanto. Se puede usar *application
+containment*: no se virtualiza el hardware, solamente el SO y los dispositvos.
+Las herramientas de orquestamiento como **docker** y **Kubernetes** sirven para
+automatizar y coordinar sistemas y servicios.
+
+### Virtualization and OS Components
+
+(!) Es complicado de implementar virtualizacion especialmente cuando no hay
+soporte de hardware. Mientras mas features provea el sistema, mas facil es de
+implementar y mejor es la performance para los guests.
+
+(!) Los VMMs se aprovechan de cualquier soporte de hardware que haya mientras
+optimizan CPU scheduling, memory management y IO modules para proveer a los
+guests uso de recursos optimo mientras protegen a la VMM de los guests y los
+guests entre si.
+
+### VM Examples
+
+- VMware Workstation
+
+  ![](img-silver/18-virt-machines/vmware.png)
+
+- JVM
+
+  ![](img-silver/18-virt-machines/jvm.png)
+
+### Virtualization Research
+
+(!) La investigacion actual extiende los usos de virtualizacon.
 
 ## Chapter 19 - Networks and Distributed Systems
