@@ -2051,6 +2051,9 @@ void main(void) {
 Se piso el IP. Esta es stack based pero tambien hay heap based. Hay distintas
 formas de detectarlo e intentar prevenirlo
 
+Como el stack crece al reves, se sobreescriben las posiciones que tenian lo que
+guarde antes, en particular se puede sobreescribir la direccion de retorno.
+
 ### Mecanismos de proteccion
 
 Algunos SOs implementan uno o mas mecanismos para protegerse de posibles
@@ -2079,9 +2082,14 @@ ataques, como
 - `Stack Canaries`: Tambien Stack Guards o Stack Cookies
 
   Se implementa a nivel compilador. Se coloca un valor en la pila luego de crear
-  el stack frame (canary) el cual se verifica antes de retornar de la funcion.
+  el stack frame (canary) el cual se verifica antes de retornar de la funcion, y si difiere se aborta el proceso.
 
   La idea es proteger el valor de retorno de la funcion de buffer overflows.
+
+  Hay distintas tecnicas, pero la idea principal es que no sea predecible. La desventaja principal es que tiene un
+  pequeño overhead en performace, pero hoy en dia se suele agregar porque es minimo.
+
+  ![](img/seginf/stack-guard.png)
 
 ### Controles de parametros
 
