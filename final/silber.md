@@ -260,6 +260,18 @@
     - [VM Examples](#vm-examples)
     - [Virtualization Research](#virtualization-research)
   - [Chapter 19 - Networks and Distributed Systems](#chapter-19---networks-and-distributed-systems)
+    - [Advantages of Distributed Systems](#advantages-of-distributed-systems)
+    - [Network Structure](#network-structure)
+    - [Communication Structure](#communication-structure)
+      - [Naming and Name Resolution](#naming-and-name-resolution)
+      - [Communication Protocols](#communication-protocols)
+      - [TCP/IP Example](#tcpip-example)
+      - [Transport Protocols UDP and TCP](#transport-protocols-udp-and-tcp)
+    - [Network and Distributed Systems](#network-and-distributed-systems)
+    - [Design Issues in Distributed Systems](#design-issues-in-distributed-systems)
+    - [Distributed File Systems](#distributed-file-systems)
+      - [DFS Naming and Transparency](#dfs-naming-and-transparency)
+      - [Remote File Access](#remote-file-access)
 
 Notacion:
 
@@ -5584,3 +5596,299 @@ guests entre si.
 (!) La investigacion actual extiende los usos de virtualizacon.
 
 ## Chapter 19 - Networks and Distributed Systems
+
+(!) Un **sistema distribuido** es una coleccion de procesadores que no comparten
+ni memoria ni clock. Cada *nodo* tiene su propia memoria local, y se comunican
+entre si mediante una red.
+
+Objetivos:
+
+- Ventajas de networked y distributed systems
+- High level overview de las redes que los interconectan
+- Definir roles y tipos de sistemas distribuidos
+- Problemas de diseño en DFSs
+
+### Advantages of Distributed Systems
+
+Los nodos pueden existir en
+
+- Client server
+
+  ![](img-silver/19-dist/client-server.png)
+
+- Peer to peer
+- Hibrido
+
+Ventajas:
+
+- Resource sharing
+- Computation speedup
+- Reliability
+
+### Network Structure
+
+Aspectos fisicos de networking.
+
+Hay dos tipos de redes: **LAN** (hosts distribuidos en un area chica) y **WAN**
+(distribuidos en un area grande), la diferencia entre ambas siendo como
+estan distribuidas geograficamente.
+
+- Local-Area Networks (LAN)
+
+  ![](img-silver/19-dist/lan.png)
+
+  Los **routers** proveen acceso a otras redes. Los *Wireless access points*
+  conectan dispositivos a la LAN, y pueden o no ser routers.
+
+  - Ethernet: 802.3 standard
+  - WiFi: 802.11 standard
+
+- Wide-Area Networks (WAN)
+
+  La primera fue la ARPANET, que evoluciono a la internet (o World Wide Web).
+  Los routers se encargan de rutear trafico entre los links.
+
+  ![](img-silver/19-dist/wan.png)
+
+### Communication Structure
+
+#### Naming and Name Resolution
+
+Para que dos procesos en sitios diferentes puedan comunicarse, deben poder
+especificar al otro. Se suelen identificar con `<host name, identifier>`, donde
+*host name* es unico en la red e *identifier* es unico en el host.
+
+Son mas practicos los nombres pero a las computadoras les gustan los numeros,
+entonces debe haber un mecanismo para **resolver** el host a un **host-id** que
+describe el destino para el networking hardware. Esto se puede tener en un
+archivo que tengan copiado todos, pero no escala. La otra alternativa es tener
+la informacion distribuida entre los sitemas. La internet usa un **DNS**
+(domain-name system) para eso.
+
+(!) Un naming system (como DNS) debe ser usado para traducir de un hostname a un
+network address, y otro protocolo (como ARP) puede ser necesario para traducir
+el network number a un network device address (un Ethernet adress por ej.)
+
+#### Communication Protocols
+
+(!) Los protocol stacks, especificados por network layering models, agregan
+informacion a un mensaje para asegurar que llegue a su destino.
+
+Cada capa en un sitema se comunica con la capa equivalente en otro. Cada una
+tiene sus protocolos, y la comunicacion sucede entre peer layers usando un
+protocolo especifico. Pueden estar implementados en hardware o software.
+
+![](img-silver/19-dist/osi-comm.png)
+
+Modelo OSI (Open Systems Interconnection) para describir las capas
+
+- **Layer 1: Physical layer**: Se encarga de entregar *bits*, implementada desde
+  hardware.
+
+- **Layer 2: Data-link layer**: Manejo de *frames* (fixed-length parts of
+  packets), incluyendo error detection y recovery que sucedan en la phusical
+  layer. Provee conexion entre direcciones fisicas
+
+- **Layer 3: Network layer**: Parte mensajes en paquetes, provee conexion entre
+  direcciones logicas, y rutea paquetes en la red. Los routers funcionan en esta
+  layer.
+
+- **Layer 4: Transport layer**: Responsable por transferir mensajes entre nodos,
+  mantener el orden de los paquetes y controlar el flujo para evitar contencion.
+
+- **Layer 5: Session layer**: Sessions o process-to-proccess communication
+  protocls.
+
+- **Layer 6: Presentation layer**: Resolver diferencias en formatos entre sitios
+  de la red, incluyendo character conversions y half vs full duplex.
+
+- **Layer 7: Application layer**: Interactuar con los usuarios. File transfer,
+  remote login, email, etc.
+
+![](img-silver/19-dist/osi-protocol-stack.png)
+
+El mensaje comienza en la capa de mas arriba y va bajando, con cada una
+agregandole message-header data para la otra capa en el lado receptor.
+
+![](img-silver/19-dist/osi-message.png)
+
+El modelo OSI sirve para formalizar pero no se usa mucho, en cambio el TCP/IP
+protocol stack si. Tiene menos capas
+
+![](img-silver/19-dist/osi-tcpip.png)
+
+(!) Si los sistemas estan en redes separadas, se necesitan routers para pasar
+paquetes de la network fuente a la destino.
+
+#### TCP/IP Example
+
+![](img-silver/19-dist/eth-pkg.png)
+
+#### Transport Protocols UDP and TCP
+
+(!) UDP y TCP direcionan paquetes a procesos que los esperan mediante el uso de
+*port numbers* unicos en el sistema. El protocolo TPC permite que el flujo de
+paquetes sea un *reliable* (agregando numeros de secuencia y ACKs),
+connection-oriented byte stream.
+
+![](img-silver/19-dist/udp-ex.png)
+
+![](img-silver/19-dist/tcp-ex.png)
+
+### Network and Distributed Systems
+
+- **Network Operating Systems**
+
+  Provee un entorno para que los usuarios acce4dan a recursos remotos
+  logueandose o transfiriendo data. Todos los de proposito general son network
+  operating systems.
+
+  Funciones que debe proveer:
+
+  - Remote login: Con ssh
+  - Remote file tranfer: con ftp/sftp
+
+  Lo que tienen es que para ssh o ftp los usuarios tienen que cambiar de
+  paradigma durante la duracion de la sesion, si estan en Windows tienen que
+  tirar comandos de Linux.
+
+- **Distributed Operating Systems**
+
+  (!) Un sistema distribuido le provee al usuario acceso a todos los recursos
+  del sistema. El acceso a un recurso compartido puede ser brindado mediante
+  data migration, computation migration o process migration. El acceso puede
+  estar especificado por el usuario o provisto implicitamente por el SO y
+  aplicaciones.
+
+  Los usuarios acceden recursos remotos de la misma forma que acceden locales.
+
+  - Data migration: Un usuario quiere acceder a un archivo, transferirlo a local
+    y despues pushear el cambiado (entero o las partes necesarias [como demand
+    paging])
+  - Computation migration: Transferir computo en vez de data a traves del
+    sistema. Por ej con RPC.
+  - Process migration: Extension del anterior. Se envia un proceso para ser
+    ejecutado.
+
+### Design Issues in Distributed Systems
+
+(!) Hay muchos desafios a superar para que un sistema distribuido funcione
+correctamente. Naming de nodos y procesos en el sistema, fault tolerance, error
+recovery y escalabilidad (aumento de load, ser fault tolerant y usar storage de
+forma eficiente [tal vez compression y/o deduplication])
+
+- **Robustness**
+
+  Deberia ser robusto para bancarse fallas
+
+- **Transparency**
+
+  Deberia ser transparente a los usuarios en terminos del lugar donde estan los
+  archivos y la mobilidad de los usuarios.
+
+- **Scalability**
+
+  Deberia ser escalable para permitir agregar mas poder de computo,
+  almacenamiento o usuarios.
+
+  Esta bueno que haga scale up gracefully cuando incremente el trafico.
+
+### Distributed File Systems
+
+(!) Un DFS es un file-service system cuyos clientes, servidores y dispositivos
+de almacenamiento estan dispersos en los sitios de un sistema distribuido. La
+actividad del servicio debe ser llevada a cabo a traves de la red, en vez de
+haber un repositorio de datos centralizado, hay multiples independientes.
+
+(!) Hay dos modelos de DFS:
+
+- **Client-server**: transparent file sharing entre clientes como si estuvieran
+  en la maquina local. El servidor guarda todos los archivos y metadata. Luego
+  de que un cliente modifica un archivo, debe actualizarlo en el servidor de
+  alguna manera, que contiene la copia maestra.
+
+  Por diseño sufre de un unico punto de falla en el servidor, ademas de ser un bottleneck.
+
+  Ejemplos: NFS (Network File System) y OpenAFS (Andrew File System).
+
+  ![](img-silver/19-dist/dfs-client-server.png)
+
+- **Cluster-based**: Distribuye los archivos entre uno o mas *data servers* y
+  esta armado para procesamiento de datos paralelo a gran escala. Trae a la mesa
+  fault toleranc y scalability.
+
+  Los clientes se conectan a uno o mas data servers que tienen chunks
+  (porciones) de los archivos, que estan replicados una cantidad de veces. Los
+  metadata servers dicen que servidor tiene que chunk.
+
+  Ejemplos: Google file system (GFS), Hadoop distributed file system (HDFS)
+
+  ![](img-silver/19-dist/dfs-cluster-based.png)
+
+#### DFS Naming and Transparency
+
+(!) Idealmente, un DFS deberia verse para sus clientes como un FS centralizado
+normal (aunque no conforme exactamente con interfaces tradicionales como POSIX).
+El *multiplicity* y *dispersion* de sus servidores y storage devices deberia ser
+transparente. Un DFS transparente facilita la mobilidad de los clientes llevando
+su entorno al lugar en donde se loggean.
+
+**Naming** es un mapeo entre objetos logicos y fisicos. En un DFS transparente,
+se le agrega una nueva dimension a la abstraccion, esconder en que parte de la
+red esta almacenado un archivo. Esto tambien permite **file replication**, que
+el mapeo retorne un set de locaciones de las replicas del archivo.
+
+Nociones:
+
+- **Location transparency**: El nombre no revela el lugar fisico en donde esta
+- **Location independence**: No hace falta modificarlo cuando cambia el lugar
+  fisico. (propiedad mas fuerte que la anterior)
+
+(!) Hay diferentes appraches para esquemas de nombres en un DFS. El mas simple
+es que se nombren por alguna combinacion del hostname y local name, que
+garantiza unicidad system-wide (pero no es ni location transparent ni
+independent). Otro, popularizado por NFS, brinda una forma de attrachear
+directorios remotos a locales, dando la apariencia de un arbol local de
+directorios coherente.
+
+#### Remote File Access
+
+(!) Los requests para acceder a un archivo remoto se manejan por dos metodos
+complementarios.
+
+- **Remote service**: Los requests de acceso se entregan al servidor. El
+  servidor hace los accesos, y los resultados se devuelven al cliente. Se puede
+  implementar con RPC. Es analogo a ir siempre a disco para file accesses.
+
+- **Caching**: Si la data necesaria para satisfacer la peticion de acceso no
+  esta cacheada, una copia de la data se trae del servidor al cliente. Los
+  accesos se hacen en la copia. El problema de mantener la copia local
+  consistente con el master file es un cache-consistency problem.
+
+  Se usa un replacement policy para que sea de tamaño fijo.
+
+  Y en donde se guarda?
+
+  - Disco: Mas reliable, no se pierde con un system crash
+  - Memory:
+    - Permite que las workstations sean *diskless*
+    - Acceso mas rapido
+
+  Para politicas de update,
+
+  - *Write through*: Se escribe directo al servidor con cada write. Mas reliable
+    pero mas lento.
+  - *Delayed write* (aka write-back): Se retrasan los updates al master copy. Como
+    los writes se hacen al cache son mas rapidos, y solo se hace el ultimo
+    update. Pero traen problemas de reliability.
+
+    Las variaciones de este son segun cuando hacer el *flush* de la data al
+    servidor.
+
+  - *Write on close*: Flush cuando se hace close. Usada por OpenAFS
+
+  Y es necesario chequear la consistencia de la data cacheada con respecto a la
+  master copy, hay dos approaches
+
+  1. Client-initiated approach
+  2. Server-initiated approach
